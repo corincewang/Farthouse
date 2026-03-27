@@ -12,7 +12,7 @@ TagManager:
   - Water
   - UI
   - RoomItems
-  - 
+  - fart_scene
   - 
   - 
   - 
@@ -46,6 +46,9 @@ TagManager:
     locked: 0
   - name: RoomItems
     uniqueID: 11285635
+    locked: 0
+  - name: Character
+    uniqueID: 2847193846
     locked: 0
   m_RenderingLayers:
   - Default
