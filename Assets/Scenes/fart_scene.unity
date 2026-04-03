@@ -145,18 +145,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 167881526}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe678363429ed4969b4021a6eba03578, type: 3}
+  m_Script: {fileID: 11500000, guid: b26e1e0f7d96b42729e39251a4bb1c8a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  totalRounds: 5
-  prepDurationSeconds: 15
-  fartPhaseDurationSeconds: 1.5
-  statusLabel: {fileID: 0}
-  timerLabel: {fileID: 0}
-  <CurrentRound>k__BackingField: 1
-  <Phase>k__BackingField: 0
-  <PrepTimeRemaining>k__BackingField: 0
-  <FartTimeRemaining>k__BackingField: 0
 --- !u!4 &167881528
 Transform:
   m_ObjectHideFlags: 0

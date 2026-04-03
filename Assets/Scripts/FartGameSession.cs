@@ -196,26 +196,6 @@ public class FartGameSession : MonoBehaviour
         return "Farthouse — press SPACE to start";
     }
 
-    void OnGUI()
-    {
-        if (statusLabel != null || timerLabel != null) return;
-
-        const float w = 2040f;
-        const float h = 480f;
-        GUILayout.BeginArea(new Rect(16f, 16f, w, h));
-        GUILayout.Label("<b>Farthouse</b>", new GUIStyle(GUI.skin.label) { richText = true, fontSize = 48 });
-        string line2 = _hudMode switch
-        {
-            HudMode.Initial => InitialSceneStatusText(),
-            HudMode.RoomPrep =>
-                $"Round {CurrentRound}/{totalRounds} — Prep: {Mathf.CeilToInt(_hudRoomTime)}s (click props)",
-            HudMode.Fart => $"Round {CurrentRound}/{totalRounds} — FART! ({_hudFartTime:0.0}s)",
-            _ => ""
-        };
-        GUILayout.Label(line2, new GUIStyle(GUI.skin.label) { fontSize = 40 });
-        GUILayout.EndArea();
-    }
-
 #if UNITY_EDITOR
     [ContextMenu("Debug/Start New Game")]
     void DebugStartNewGame() => StartNewGame();
