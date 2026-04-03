@@ -1,10 +1,13 @@
 fileFormatVersion: 2
-guid: 437b932e087d543d6b88debd816976a6
+guid: c1920f53c5be6477c9f6163ffa73d4f1
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -6985196729221983356
-    second: plant 1_0
+      213: 2943317627447973752
+    second: window 1_0
+  - first:
+      213: 4431155448651384868
+    second: window 1_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -49,8 +52,8 @@ TextureImporter:
   spriteMode: 1
   spriteExtrude: 1
   spriteMeshType: 1
-  alignment: 9
-  spritePivot: {x: 0.47916338, y: 0.1403732}
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
   spritePixelsToUnits: 100
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
@@ -100,13 +103,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: plant 1_0
+      name: window 1_0
       rect:
         serializedVersion: 2
-        x: 60
-        y: 55
-        width: 294
-        height: 419
+        x: 52
+        y: 61
+        width: 310
+        height: 384
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +118,30 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 483d08c75989f0f90800000000000000
-      internalID: -6985196729221983356
+      spriteID: 8779e2da9c3c8d820800000000000000
+      internalID: 2943317627447973752
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: window 1_1
+      rect:
+        serializedVersion: 2
+        x: 367
+        y: 105
+        width: 12
+        height: 10
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 428076d3760ae7d30800000000000000
+      internalID: 4431155448651384868
       vertices: []
       indices: 
       edges: []
@@ -135,7 +160,8 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      plant 1_0: -6985196729221983356
+      window 1_0: 2943317627447973752
+      window 1_1: 4431155448651384868
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

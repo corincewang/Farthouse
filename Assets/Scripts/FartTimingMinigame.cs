@@ -1,0 +1,469 @@
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
+
+/// <summary>
+/// Fart meter UI: white bar + cursor. Space/click once locks the fart (debounced). Shows result, then Space again (after release + short delay) continues to room.
+/// </summary>
+[DisallowMultipleComponent]
+public class FartTimingMinigame : MonoBehaviour
+{
+    [Header("Oscillation")]
+    [SerializeField] float baseSpeed = 5f;
+    [SerializeField] [Range(0f, 0.95f)] float speedWobbleAmount = 0.45f;
+    [SerializeField] float speedWobbleFrequency = 0.4f;
+
+    [Header("Layout")]
+    [SerializeField] float barWidth = 76f;
+    [SerializeField] float barHeight = 680f;
+    [SerializeField] float meterInsetFromRight = 120f;
+    [SerializeField] float iconBarGap = 16f;
+    [SerializeField] float iconColumnWidth = 112f;
+    [SerializeField] float animalIconSize = 96f;
+    [Tooltip("Off = only the bar (use scene mouse/lion sprites). On = duplicate icons on the Canvas next to the bar.")]
+    [SerializeField] bool buildAnimalIconsNextToBar;
+
+    [Header("Left panel (optional UI duplicate)")]
+    [SerializeField] bool useBuiltInButtPanel;
+    [SerializeField] Sprite buttSprite;
+    [SerializeField] [Range(0.2f, 0.55f)] float buttPanelWidthFraction = 0.44f;
+
+    [Header("Animals beside bar (only if Build Animal Icons is on)")]
+    [SerializeField] Sprite quietAnimalSprite;
+    [SerializeField] Sprite loudAnimalSprite;
+
+    [Header("Result text")]
+    [SerializeField] float quietLoudnessMax = 0.34f;
+    [SerializeField] float loudLoudnessMin = 0.66f;
+    [SerializeField] string quietMessage = "Made a quiet fart.";
+    [SerializeField] string mediumMessage = "Made a medium fart.";
+    [SerializeField] string loudMessage = "Made a loud fart.";
+    [SerializeField] string continuePromptMessage = "Press SPACE to continue.";
+
+    [Header("Audio")]
+    [SerializeField] AudioClip fartClip;
+    [SerializeField] float quietVolume = 0.12f;
+    [SerializeField] float loudVolume = 1f;
+
+    [Header("Input debounce (after fart)")]
+    [Tooltip("After locking the fart, ignore continue until Space/mouse are released.")]
+    [SerializeField] bool requireReleaseBeforeContinue = true;
+    [Tooltip("After you release keys, wait this long before SPACE can continue (keeps the result on screen).")]
+    [SerializeField] float minSecondsBeforeContinue = 3.5f;
+
+    [Header("Cursor look")]
+    [SerializeField] Color cursorColor = new Color(0.62f, 0.55f, 0.06f, 1f);
+
+    public float CommittedLoudness01 { get; private set; }
+    public float CurrentLoudness01 => _cursor01;
+
+    FartGameSession _session;
+    float _phaseRemaining;
+    bool _committed;
+    float _cursor01;
+    float _oscillatorPhase;
+    RectTransform _cursorRt;
+    float _barHalfHeight;
+    AudioSource _audio;
+    Text _resultText;
+    GameObject _resultBannerRoot;
+    string _guiResultBackup;
+
+    bool _waitReleaseAfterCommit;
+    float _continueCooldown;
+
+    static Sprite _uiSprite;
+
+    static Sprite UiWhiteSprite()
+    {
+        if (_uiSprite != null) return _uiSprite;
+        var tex = Texture2D.whiteTexture;
+        _uiSprite = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        return _uiSprite;
+    }
+
+    static Font BuiltinUiFont()
+    {
+        foreach (var path in new[] { "LegacyRuntime.ttf", "Arial.ttf" })
+        {
+            var f = Resources.GetBuiltinResource<Font>(path);
+            if (f != null) return f;
+        }
+
+        foreach (var name in new[] { "Arial", "Helvetica", "PingFang SC", "Heiti SC", "Microsoft YaHei", "SimHei" })
+        {
+            try
+            {
+                var f = Font.CreateDynamicFontFromOSFont(name, 64);
+                if (f != null) return f;
+            }
+            catch
+            {
+                // try next
+            }
+        }
+
+        return null;
+    }
+
+    static bool SpaceOrPrimaryClickDown()
+    {
+        if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
+            return true;
+#if ENABLE_INPUT_SYSTEM
+        var kb = Keyboard.current;
+        if (kb != null && kb.spaceKey.wasPressedThisFrame)
+            return true;
+        var mouse = Mouse.current;
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            return true;
+#endif
+        return false;
+    }
+
+    static bool SpaceOrPrimaryHeld()
+    {
+        if (Input.GetKey(KeyCode.Space) || Input.GetMouseButton(0))
+            return true;
+#if ENABLE_INPUT_SYSTEM
+        var kb = Keyboard.current;
+        if (kb != null && kb.spaceKey.isPressed)
+            return true;
+        var mouse = Mouse.current;
+        if (mouse != null && mouse.leftButton.isPressed)
+            return true;
+#endif
+        return false;
+    }
+
+    void Awake()
+    {
+        EnsureUi();
+    }
+
+    void Start()
+    {
+        if (_session == null && FartGameSession.Instance != null)
+            BeginPhase(FartGameSession.Instance);
+    }
+
+    public void BeginPhase(FartGameSession session)
+    {
+        _session = session;
+        if (_session == null) return;
+
+        _phaseRemaining = _session.FartPhaseDurationSeconds;
+        _committed = false;
+        _waitReleaseAfterCommit = false;
+        _continueCooldown = 0f;
+        _oscillatorPhase = 0f;
+        _guiResultBackup = null;
+        if (_resultBannerRoot != null)
+            _resultBannerRoot.SetActive(false);
+        if (_resultText != null)
+            _resultText.text = string.Empty;
+
+        _session.NotifyFartSceneEntered();
+        _session.SetFartHud(_phaseRemaining);
+        _audio = GetComponent<AudioSource>();
+        if (_audio == null) _audio = gameObject.AddComponent<AudioSource>();
+        _audio.playOnAwake = false;
+    }
+
+    void Update()
+    {
+        float dt = Time.deltaTime;
+
+        if (!_committed)
+        {
+            float wobble = 1f + speedWobbleAmount * Mathf.Sin(Time.time * speedWobbleFrequency * Mathf.PI * 2f);
+            wobble = Mathf.Max(0.15f, wobble);
+            _oscillatorPhase += dt * baseSpeed * wobble;
+            _cursor01 = Mathf.PingPong(_oscillatorPhase, 1f);
+
+            if (_cursorRt != null)
+            {
+                float y = Mathf.Lerp(_barHalfHeight, -_barHalfHeight, _cursor01);
+                _cursorRt.anchoredPosition = new Vector2(0f, y);
+            }
+
+            bool timedOut = false;
+            if (_session != null)
+            {
+                _phaseRemaining -= dt;
+                _session.SetFartHud(Mathf.Max(0f, _phaseRemaining));
+                timedOut = _phaseRemaining <= 0f;
+            }
+
+            if (SpaceOrPrimaryClickDown() || timedOut)
+            {
+                if (_session != null)
+                    Commit();
+                else if (SpaceOrPrimaryClickDown())
+                    Debug.LogWarning(
+                        "[Farthouse] No FartGameSession — start Play from initial_scene (not fart_scene alone), or add FartGameSession to the run.");
+            }
+        }
+        else
+        {
+            if (_session == null) return;
+
+            if (requireReleaseBeforeContinue && _waitReleaseAfterCommit)
+            {
+                if (!SpaceOrPrimaryHeld())
+                    _waitReleaseAfterCommit = false;
+                return;
+            }
+
+            if (_continueCooldown > 0f)
+            {
+                _continueCooldown -= dt;
+                return;
+            }
+
+            if (SpaceOrPrimaryClickDown())
+            {
+                enabled = false;
+                _session.AcknowledgeFartResultAndContinue();
+            }
+        }
+    }
+
+    void Commit()
+    {
+        if (_committed) return;
+        _committed = true;
+        CommittedLoudness01 = _cursor01;
+        if (_session != null)
+            _session.SetLastFartLoudness(CommittedLoudness01);
+
+        float vol = Mathf.Lerp(quietVolume, loudVolume, CommittedLoudness01);
+        if (fartClip != null && _audio != null)
+            _audio.PlayOneShot(fartClip, vol);
+
+        ShowResultText(CommittedLoudness01);
+        _waitReleaseAfterCommit = requireReleaseBeforeContinue;
+        _continueCooldown = minSecondsBeforeContinue;
+    }
+
+    void ShowResultText(float loudness01)
+    {
+        if (_resultText == null) return;
+
+        string msg;
+        if (loudness01 <= quietLoudnessMax)
+            msg = quietMessage;
+        else if (loudness01 >= loudLoudnessMin)
+            msg = loudMessage;
+        else
+            msg = mediumMessage;
+
+        string full = msg + "\n\n" + continuePromptMessage;
+        _resultText.text = full;
+        if (_resultBannerRoot != null)
+            _resultBannerRoot.SetActive(true);
+        _guiResultBackup = _resultText.font == null ? full : null;
+        Debug.Log("[Farthouse] Fart result: " + full);
+    }
+
+    void OnGUI()
+    {
+        if (string.IsNullOrEmpty(_guiResultBackup)) return;
+        var style = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 26,
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = true,
+            normal = { textColor = Color.white }
+        };
+        float h = Mathf.Min(220f, Screen.height * 0.28f);
+        GUI.Box(new Rect(16f, Screen.height - h - 24f, Screen.width - 32f, h), GUIContent.none);
+        GUI.Label(new Rect(32f, Screen.height - h - 16f, Screen.width - 64f, h - 8f), _guiResultBackup, style);
+    }
+
+    bool _uiBuilt;
+
+    void EnsureUi()
+    {
+        if (_uiBuilt) return;
+        _uiBuilt = true;
+
+        if (EventSystem.current == null)
+        {
+            var es = new GameObject("EventSystem");
+            es.AddComponent<EventSystem>();
+            es.AddComponent<StandaloneInputModule>();
+        }
+
+        var canvasGo = new GameObject("FartTimingUI");
+        canvasGo.transform.SetParent(null, false);
+        var canvas = canvasGo.AddComponent<Canvas>();
+        // Overlay always draws on top of world-space 2D; Screen Space Camera often ends up behind sprites.
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 32767;
+        canvas.overrideSorting = true;
+        canvas.pixelPerfect = false;
+        var scaler = canvasGo.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
+        canvasGo.AddComponent<GraphicRaycaster>();
+
+        if (useBuiltInButtPanel)
+            BuildButtPanel(canvasGo.transform);
+        BuildMeterBlock(canvasGo.transform);
+        BuildResultBanner(canvasGo.transform);
+    }
+
+    void BuildButtPanel(Transform canvas)
+    {
+        if (buttSprite == null) return;
+
+        var go = new GameObject("ButtPanel", typeof(RectTransform));
+        go.transform.SetParent(canvas, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 0.08f);
+        rt.anchorMax = new Vector2(buttPanelWidthFraction, 0.92f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+
+        var img = go.AddComponent<Image>();
+        img.sprite = buttSprite;
+        img.type = Image.Type.Simple;
+        img.preserveAspect = true;
+        img.color = Color.white;
+    }
+
+    void BuildMeterBlock(Transform canvas)
+    {
+        float iconCol = buildAnimalIconsNextToBar ? iconColumnWidth : 0f;
+        float gap = buildAnimalIconsNextToBar ? iconBarGap : 0f;
+        float clusterWidth = iconCol + gap + barWidth;
+
+        float cursorHalf = 10f;
+        _barHalfHeight = barHeight * 0.5f - cursorHalf;
+
+        var root = new GameObject("MeterRoot", typeof(RectTransform));
+        root.transform.SetParent(canvas, false);
+        var rootRt = root.GetComponent<RectTransform>();
+        rootRt.anchorMin = rootRt.anchorMax = new Vector2(1f, 0.5f);
+        rootRt.pivot = new Vector2(1f, 0.5f);
+        rootRt.sizeDelta = new Vector2(clusterWidth, barHeight);
+        rootRt.anchoredPosition = new Vector2(-meterInsetFromRight, 0f);
+
+        var barGo = new GameObject("Bar", typeof(RectTransform));
+        barGo.transform.SetParent(root.transform, false);
+        var barRt = barGo.GetComponent<RectTransform>();
+        barRt.anchorMin = barRt.anchorMax = new Vector2(1f, 0.5f);
+        barRt.pivot = new Vector2(1f, 0.5f);
+        barRt.sizeDelta = new Vector2(barWidth, barHeight);
+        barRt.anchoredPosition = Vector2.zero;
+
+        var barImg = barGo.AddComponent<Image>();
+        barImg.sprite = UiWhiteSprite();
+        barImg.type = Image.Type.Simple;
+        barImg.color = Color.white;
+        barImg.raycastTarget = false;
+
+        var cursorGo = new GameObject("Cursor", typeof(RectTransform));
+        cursorGo.transform.SetParent(barGo.transform, false);
+        _cursorRt = cursorGo.GetComponent<RectTransform>();
+        _cursorRt.anchorMin = _cursorRt.anchorMax = new Vector2(0.5f, 0.5f);
+        _cursorRt.pivot = new Vector2(0.5f, 0.5f);
+        _cursorRt.sizeDelta = new Vector2(barWidth + 20f, cursorHalf * 2f);
+        _cursorRt.anchoredPosition = new Vector2(0f, _barHalfHeight);
+
+        var cursorImg = cursorGo.AddComponent<Image>();
+        cursorImg.sprite = UiWhiteSprite();
+        cursorImg.color = cursorColor;
+        cursorImg.raycastTarget = false;
+
+        if (buildAnimalIconsNextToBar)
+        {
+            float iconHalf = animalIconSize * 0.5f;
+            float colCenterX = iconColumnWidth * 0.5f;
+            BuildSideAnimal(root.transform, "QuietAnimal", quietAnimalSprite, animalIconSize,
+                new Vector2(colCenterX, barHeight * 0.5f - iconHalf));
+            BuildSideAnimal(root.transform, "LoudAnimal", loudAnimalSprite, animalIconSize,
+                new Vector2(colCenterX, -barHeight * 0.5f + iconHalf));
+        }
+    }
+
+    static void BuildSideAnimal(Transform parent, string name, Sprite sprite, float size, Vector2 anchoredPos)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(size, size);
+        rt.anchoredPosition = anchoredPos;
+
+        var img = go.AddComponent<Image>();
+        img.sprite = sprite;
+        img.type = Image.Type.Simple;
+        img.preserveAspect = true;
+        img.color = sprite != null ? Color.white : new Color(1f, 1f, 1f, 0f);
+        img.raycastTarget = false;
+    }
+
+    void BuildResultBanner(Transform canvas)
+    {
+        var banner = new GameObject("ResultBanner", typeof(RectTransform));
+        banner.transform.SetParent(canvas, false);
+        _resultBannerRoot = banner;
+        var bannerRt = banner.GetComponent<RectTransform>();
+        bannerRt.anchorMin = new Vector2(0.04f, 0.06f);
+        bannerRt.anchorMax = new Vector2(0.96f, 0.32f);
+        bannerRt.offsetMin = Vector2.zero;
+        bannerRt.offsetMax = Vector2.zero;
+        bannerRt.pivot = new Vector2(0.5f, 0.5f);
+
+        var backdrop = new GameObject("Backdrop", typeof(RectTransform));
+        backdrop.transform.SetParent(banner.transform, false);
+        var bdRt = backdrop.GetComponent<RectTransform>();
+        bdRt.anchorMin = Vector2.zero;
+        bdRt.anchorMax = Vector2.one;
+        bdRt.offsetMin = Vector2.zero;
+        bdRt.offsetMax = Vector2.zero;
+        var bdImg = backdrop.AddComponent<Image>();
+        bdImg.sprite = UiWhiteSprite();
+        bdImg.color = new Color(0f, 0f, 0f, 0.82f);
+        bdImg.raycastTarget = false;
+
+        var textGo = new GameObject("ResultText", typeof(RectTransform));
+        textGo.transform.SetParent(banner.transform, false);
+        var trt = textGo.GetComponent<RectTransform>();
+        trt.anchorMin = new Vector2(0.02f, 0.08f);
+        trt.anchorMax = new Vector2(0.98f, 0.92f);
+        trt.offsetMin = Vector2.zero;
+        trt.offsetMax = Vector2.zero;
+
+        _resultText = textGo.AddComponent<Text>();
+        var font = BuiltinUiFont();
+        if (font != null)
+            _resultText.font = font;
+        else
+            Debug.LogWarning("[Farthouse] No UI font found — result uses IMGUI fallback. Assign a Font asset on a prefab or install standard Unity resources.");
+        _resultText.fontSize = 40;
+        _resultText.fontStyle = FontStyle.Bold;
+        _resultText.alignment = TextAnchor.MiddleCenter;
+        _resultText.color = Color.white;
+        _resultText.text = string.Empty;
+        _resultText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _resultText.verticalOverflow = VerticalWrapMode.Overflow;
+        _resultText.lineSpacing = 1.05f;
+
+        var outline = textGo.AddComponent<Outline>();
+        outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+        banner.transform.SetAsLastSibling();
+        banner.SetActive(false);
+    }
+}

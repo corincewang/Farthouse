@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 /// <summary>
 /// Persists across scenes (DontDestroyOnLoad). Flow is always
 /// <b>initial_scene → room_scene → fart_scene → initial_scene → …</b>.
-/// After each fart, the game returns to <b>initial_scene</b> for a short animation; then call <see cref="ContinueToRoomPhase"/>.
+/// After each fart, the minigame can send the player straight to <b>room_scene</b> (see <see cref="AcknowledgeFartResultAndContinue"/>), or you can still use <b>initial_scene</b> + <see cref="ContinueToRoomPhase"/> for an interstitial.
 /// Place one instance in <b>initial_scene</b>. Add all three scenes to Build Settings.
 /// </summary>
 public class FartGameSession : MonoBehaviour
@@ -13,7 +13,7 @@ public class FartGameSession : MonoBehaviour
 
     [SerializeField] int totalRounds = 5;
     [SerializeField] float prepDurationSeconds = 15f;
-    [SerializeField] float fartPhaseDurationSeconds = 1.5f;
+    [SerializeField] float fartPhaseDurationSeconds = 6f;
 
     [Header("Scene asset names (must match Build Settings, no .unity)")]
     [SerializeField] string initialSceneName = "initial_scene";
@@ -28,6 +28,9 @@ public class FartGameSession : MonoBehaviour
     public int TotalRounds => totalRounds;
     public float PrepDurationSeconds => prepDurationSeconds;
     public float FartPhaseDurationSeconds => fartPhaseDurationSeconds;
+
+    /// <summary>After last fart commit: 0 = quiet (top of bar), 1 = loud (bottom).</summary>
+    public float LastFartLoudness01 { get; private set; }
 
     /// <summary>True only during room_scene prep countdown.</summary>
     public bool CanInteractDuringPrep { get; internal set; }
@@ -74,6 +77,11 @@ public class FartGameSession : MonoBehaviour
     public bool AwaitingContinueToRoom => _awaitingContinueToRoom;
     public bool CompletedRunAwaitingMenu => _completedRunOnInitial;
 
+    public void SetLastFartLoudness(float t)
+    {
+        LastFartLoudness01 = Mathf.Clamp01(t);
+    }
+
     /// <summary>New game from menu: round 1 → room_scene.</summary>
     public void StartNewGame()
     {
@@ -116,7 +124,7 @@ public class FartGameSession : MonoBehaviour
         LoadFartScene();
     }
 
-    /// <summary>Called by <see cref="FartSceneController"/> when fart phase ends. Always returns to initial_scene.</summary>
+    /// <summary>Legacy path: after fart, go to initial_scene and wait for <see cref="ContinueToRoomPhase"/>.</summary>
     public void NotifyFartPhaseEnded()
     {
         if (CurrentRound >= totalRounds)
@@ -132,6 +140,24 @@ public class FartGameSession : MonoBehaviour
         _awaitingContinueToRoom = true;
         _completedRunOnInitial = false;
         LoadInitialScene();
+    }
+
+    /// <summary>After the player reads the fart result: next round → <b>room_scene</b>; final round → <b>initial_scene</b> (run complete).</summary>
+    public void AcknowledgeFartResultAndContinue()
+    {
+        if (CurrentRound >= totalRounds)
+        {
+            GameCompleted?.Invoke();
+            _awaitingContinueToRoom = false;
+            _completedRunOnInitial = true;
+            LoadInitialScene();
+            return;
+        }
+
+        CurrentRound++;
+        _awaitingContinueToRoom = false;
+        _completedRunOnInitial = false;
+        LoadRoomScene();
     }
 
     public void NotifyRoomSceneEntered()
