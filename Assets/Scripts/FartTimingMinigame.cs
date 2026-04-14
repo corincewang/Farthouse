@@ -1,12 +1,14 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Fart meter UI: white bar + cursor. Space/click once locks the fart (debounced). Shows result, then Space again (after release + short delay) continues to room.
+/// Fart meter UI: <b>SPACE or left-click</b> locks the fart. After result, use the on-screen <b>Return to room</b> button only (no Space/click to advance).
 /// </summary>
 [DisallowMultipleComponent]
 public class FartTimingMinigame : MonoBehaviour
@@ -41,18 +43,21 @@ public class FartTimingMinigame : MonoBehaviour
     [SerializeField] string quietMessage = "Made a quiet fart.";
     [SerializeField] string mediumMessage = "Made a medium fart.";
     [SerializeField] string loudMessage = "Made a loud fart.";
-    [SerializeField] string continuePromptMessage = "Press SPACE to continue.";
+    [SerializeField] string returnToRoomButtonLabel = "Return to room";
+    [SerializeField] string endRunButtonLabel = "Continue to ending";
+
+    [Header("Aim phase prompt")]
+    [FormerlySerializedAs("pressSpaceToFartMessage")]
+    [SerializeField] string aimClickPromptMessage = "Press SPACE or click to fart.";
+
+    [Header("Fart phase timer")]
+    [Tooltip("If off, the meter never times out — you only commit with SPACE or left-click.")]
+    [SerializeField] bool commitWhenFartPhaseTimesOut = false;
 
     [Header("Audio")]
     [SerializeField] AudioClip fartClip;
     [SerializeField] float quietVolume = 0.12f;
     [SerializeField] float loudVolume = 1f;
-
-    [Header("Input debounce (after fart)")]
-    [Tooltip("After locking the fart, ignore continue until Space/mouse are released.")]
-    [SerializeField] bool requireReleaseBeforeContinue = true;
-    [Tooltip("After you release keys, wait this long before SPACE can continue (keeps the result on screen).")]
-    [SerializeField] float minSecondsBeforeContinue = 3.5f;
 
     [Header("Cursor look")]
     [SerializeField] Color cursorColor = new Color(0.62f, 0.55f, 0.06f, 1f);
@@ -71,9 +76,13 @@ public class FartTimingMinigame : MonoBehaviour
     Text _resultText;
     GameObject _resultBannerRoot;
     string _guiResultBackup;
-
-    bool _waitReleaseAfterCommit;
-    float _continueCooldown;
+    GameObject _aimPromptRoot;
+    Text _aimPromptText;
+    GameObject _returnButtonRoot;
+    Button _returnButton;
+    Text _returnButtonCaption;
+    bool _leftFartScene;
+    Coroutine _armReturnButtonCoroutine;
 
     static Sprite _uiSprite;
 
@@ -114,11 +123,9 @@ public class FartTimingMinigame : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
             return true;
 #if ENABLE_INPUT_SYSTEM
-        var kb = Keyboard.current;
-        if (kb != null && kb.spaceKey.wasPressedThisFrame)
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             return true;
-        var mouse = Mouse.current;
-        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             return true;
 #endif
         return false;
@@ -129,11 +136,9 @@ public class FartTimingMinigame : MonoBehaviour
         if (Input.GetKey(KeyCode.Space) || Input.GetMouseButton(0))
             return true;
 #if ENABLE_INPUT_SYSTEM
-        var kb = Keyboard.current;
-        if (kb != null && kb.spaceKey.isPressed)
+        if (Keyboard.current != null && Keyboard.current.spaceKey.isPressed)
             return true;
-        var mouse = Mouse.current;
-        if (mouse != null && mouse.leftButton.isPressed)
+        if (Mouse.current != null && Mouse.current.leftButton.isPressed)
             return true;
 #endif
         return false;
@@ -152,19 +157,34 @@ public class FartTimingMinigame : MonoBehaviour
 
     public void BeginPhase(FartGameSession session)
     {
+        if (_armReturnButtonCoroutine != null)
+        {
+            StopCoroutine(_armReturnButtonCoroutine);
+            _armReturnButtonCoroutine = null;
+        }
+
         _session = session;
         if (_session == null) return;
 
         _phaseRemaining = _session.FartPhaseDurationSeconds;
         _committed = false;
-        _waitReleaseAfterCommit = false;
-        _continueCooldown = 0f;
         _oscillatorPhase = 0f;
         _guiResultBackup = null;
+        _leftFartScene = false;
         if (_resultBannerRoot != null)
             _resultBannerRoot.SetActive(false);
         if (_resultText != null)
             _resultText.text = string.Empty;
+        if (_returnButtonRoot != null)
+        {
+            _returnButtonRoot.SetActive(false);
+            if (_returnButton != null)
+                _returnButton.interactable = true;
+            RefreshReturnButtonCaption();
+        }
+
+        if (_aimPromptRoot != null)
+            _aimPromptRoot.SetActive(true);
 
         _session.NotifyFartSceneEntered();
         _session.SetFartHud(_phaseRemaining);
@@ -175,61 +195,63 @@ public class FartTimingMinigame : MonoBehaviour
 
     void Update()
     {
+        if (_committed || _leftFartScene)
+            return;
+
         float dt = Time.deltaTime;
+        float wobble = 1f + speedWobbleAmount * Mathf.Sin(Time.time * speedWobbleFrequency * Mathf.PI * 2f);
+        wobble = Mathf.Max(0.15f, wobble);
+        _oscillatorPhase += dt * baseSpeed * wobble;
+        _cursor01 = Mathf.PingPong(_oscillatorPhase, 1f);
 
-        if (!_committed)
+        if (_cursorRt != null)
         {
-            float wobble = 1f + speedWobbleAmount * Mathf.Sin(Time.time * speedWobbleFrequency * Mathf.PI * 2f);
-            wobble = Mathf.Max(0.15f, wobble);
-            _oscillatorPhase += dt * baseSpeed * wobble;
-            _cursor01 = Mathf.PingPong(_oscillatorPhase, 1f);
+            float y = Mathf.Lerp(_barHalfHeight, -_barHalfHeight, _cursor01);
+            _cursorRt.anchoredPosition = new Vector2(0f, y);
+        }
 
-            if (_cursorRt != null)
-            {
-                float y = Mathf.Lerp(_barHalfHeight, -_barHalfHeight, _cursor01);
-                _cursorRt.anchoredPosition = new Vector2(0f, y);
-            }
-
-            bool timedOut = false;
-            if (_session != null)
+        bool timedOut = false;
+        if (_session != null)
+        {
+            if (commitWhenFartPhaseTimesOut)
             {
                 _phaseRemaining -= dt;
                 _session.SetFartHud(Mathf.Max(0f, _phaseRemaining));
                 timedOut = _phaseRemaining <= 0f;
             }
-
-            if (SpaceOrPrimaryClickDown() || timedOut)
-            {
-                if (_session != null)
-                    Commit();
-                else if (SpaceOrPrimaryClickDown())
-                    Debug.LogWarning(
-                        "[Farthouse] No FartGameSession — start Play from initial_scene (not fart_scene alone), or add FartGameSession to the run.");
-            }
+            else
+                _session.SetFartHud(_phaseRemaining);
         }
-        else
+
+        if (SpaceOrPrimaryClickDown() || timedOut)
         {
-            if (_session == null) return;
-
-            if (requireReleaseBeforeContinue && _waitReleaseAfterCommit)
-            {
-                if (!SpaceOrPrimaryHeld())
-                    _waitReleaseAfterCommit = false;
-                return;
-            }
-
-            if (_continueCooldown > 0f)
-            {
-                _continueCooldown -= dt;
-                return;
-            }
-
-            if (SpaceOrPrimaryClickDown())
-            {
-                enabled = false;
-                _session.AcknowledgeFartResultAndContinue();
-            }
+            if (_session != null)
+                Commit();
+            else if (SpaceOrPrimaryClickDown())
+                Debug.LogWarning(
+                    "[Farthouse] No FartGameSession — start Play from initial_scene (not fart_scene alone), or add FartGameSession to the run.");
         }
+    }
+
+    /// <summary>Wire this to a UI Button if you build your own result UI instead of the runtime banner.</summary>
+    public void OnReturnToRoomClicked()
+    {
+        if (!_committed || _session == null || _leftFartScene)
+            return;
+        if (_returnButton != null && !_returnButton.interactable)
+            return;
+
+        if (_armReturnButtonCoroutine != null)
+        {
+            StopCoroutine(_armReturnButtonCoroutine);
+            _armReturnButtonCoroutine = null;
+        }
+
+        _leftFartScene = true;
+        if (_returnButton != null)
+            _returnButton.interactable = false;
+        enabled = false;
+        _session.AcknowledgeFartResultAndContinue();
     }
 
     void Commit()
@@ -239,17 +261,57 @@ public class FartTimingMinigame : MonoBehaviour
         CommittedLoudness01 = _cursor01;
         if (_session != null)
             _session.SetLastFartLoudness(CommittedLoudness01);
+        if (_aimPromptRoot != null)
+            _aimPromptRoot.SetActive(false);
 
         float vol = Mathf.Lerp(quietVolume, loudVolume, CommittedLoudness01);
         if (fartClip != null && _audio != null)
             _audio.PlayOneShot(fartClip, vol);
 
-        ShowResultText(CommittedLoudness01);
-        _waitReleaseAfterCommit = requireReleaseBeforeContinue;
-        _continueCooldown = minSecondsBeforeContinue;
+        ShowResultAfterCommit(CommittedLoudness01);
+        RefreshReturnButtonCaption();
+        if (_returnButtonRoot != null)
+        {
+            if (EventSystem.current != null)
+                EventSystem.current.SetSelectedGameObject(null);
+
+            _returnButtonRoot.SetActive(true);
+            if (_returnButton != null)
+            {
+                _returnButton.interactable = false;
+                if (_armReturnButtonCoroutine != null)
+                    StopCoroutine(_armReturnButtonCoroutine);
+                _armReturnButtonCoroutine = StartCoroutine(ArmReturnButtonAfterCommitInputReleased());
+            }
+        }
     }
 
-    void ShowResultText(float loudness01)
+    IEnumerator ArmReturnButtonAfterCommitInputReleased()
+    {
+        // Same SPACE / click that committed must not immediately Submit / click this Button.
+        yield return null;
+
+        float waitUntil = Time.unscaledTime + 3f;
+        while (Time.unscaledTime < waitUntil && SpaceOrPrimaryHeld())
+            yield return null;
+
+        yield return new WaitForSecondsRealtime(0.12f);
+
+        _armReturnButtonCoroutine = null;
+        if (_leftFartScene || _returnButton == null)
+            yield break;
+
+        _returnButton.interactable = true;
+    }
+
+    void RefreshReturnButtonCaption()
+    {
+        if (_returnButtonCaption == null || _session == null) return;
+        bool lastRound = _session.CurrentRound >= _session.TotalRounds;
+        _returnButtonCaption.text = lastRound ? endRunButtonLabel : returnToRoomButtonLabel;
+    }
+
+    void ShowResultAfterCommit(float loudness01)
     {
         if (_resultText == null) return;
 
@@ -261,12 +323,11 @@ public class FartTimingMinigame : MonoBehaviour
         else
             msg = mediumMessage;
 
-        string full = msg + "\n\n" + continuePromptMessage;
-        _resultText.text = full;
+        _resultText.text = msg;
         if (_resultBannerRoot != null)
             _resultBannerRoot.SetActive(true);
-        _guiResultBackup = _resultText.font == null ? full : null;
-        Debug.Log("[Farthouse] Fart result: " + full);
+        _guiResultBackup = _resultText.font == null ? msg : null;
+        Debug.Log("[Farthouse] Fart result: " + msg);
     }
 
     void OnGUI()
@@ -313,10 +374,39 @@ public class FartTimingMinigame : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
+        BuildAimPrompt(canvasGo.transform);
         if (useBuiltInButtPanel)
             BuildButtPanel(canvasGo.transform);
         BuildMeterBlock(canvasGo.transform);
         BuildResultBanner(canvasGo.transform);
+    }
+
+    void BuildAimPrompt(Transform canvas)
+    {
+        var root = new GameObject("AimPrompt", typeof(RectTransform));
+        root.transform.SetParent(canvas, false);
+        _aimPromptRoot = root;
+        var rt = root.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.08f, 0.88f);
+        rt.anchorMax = new Vector2(0.92f, 0.98f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+
+        _aimPromptText = root.AddComponent<Text>();
+        var font = BuiltinUiFont();
+        if (font != null)
+            _aimPromptText.font = font;
+        _aimPromptText.fontSize = 38;
+        _aimPromptText.fontStyle = FontStyle.Bold;
+        _aimPromptText.alignment = TextAnchor.MiddleCenter;
+        _aimPromptText.color = Color.white;
+        _aimPromptText.text = aimClickPromptMessage;
+        _aimPromptText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _aimPromptText.verticalOverflow = VerticalWrapMode.Overflow;
+        var outline = root.AddComponent<Outline>();
+        outline.effectColor = new Color(0f, 0f, 0f, 0.88f);
+        outline.effectDistance = new Vector2(2f, -2f);
     }
 
     void BuildButtPanel(Transform canvas)
@@ -418,8 +508,8 @@ public class FartTimingMinigame : MonoBehaviour
         banner.transform.SetParent(canvas, false);
         _resultBannerRoot = banner;
         var bannerRt = banner.GetComponent<RectTransform>();
-        bannerRt.anchorMin = new Vector2(0.04f, 0.06f);
-        bannerRt.anchorMax = new Vector2(0.96f, 0.32f);
+        bannerRt.anchorMin = new Vector2(0.04f, 0.05f);
+        bannerRt.anchorMax = new Vector2(0.96f, 0.36f);
         bannerRt.offsetMin = Vector2.zero;
         bannerRt.offsetMax = Vector2.zero;
         bannerRt.pivot = new Vector2(0.5f, 0.5f);
@@ -439,8 +529,8 @@ public class FartTimingMinigame : MonoBehaviour
         var textGo = new GameObject("ResultText", typeof(RectTransform));
         textGo.transform.SetParent(banner.transform, false);
         var trt = textGo.GetComponent<RectTransform>();
-        trt.anchorMin = new Vector2(0.02f, 0.08f);
-        trt.anchorMax = new Vector2(0.98f, 0.92f);
+        trt.anchorMin = new Vector2(0.02f, 0.28f);
+        trt.anchorMax = new Vector2(0.98f, 0.95f);
         trt.offsetMin = Vector2.zero;
         trt.offsetMax = Vector2.zero;
 
@@ -463,6 +553,52 @@ public class FartTimingMinigame : MonoBehaviour
         outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
         outline.effectDistance = new Vector2(1.5f, -1.5f);
 
+        var btnGo = new GameObject("ReturnToRoomButton", typeof(RectTransform));
+        btnGo.transform.SetParent(banner.transform, false);
+        _returnButtonRoot = btnGo;
+        var btnRt = btnGo.GetComponent<RectTransform>();
+        btnRt.anchorMin = new Vector2(0.2f, 0.06f);
+        btnRt.anchorMax = new Vector2(0.8f, 0.24f);
+        btnRt.offsetMin = Vector2.zero;
+        btnRt.offsetMax = Vector2.zero;
+        btnRt.pivot = new Vector2(0.5f, 0.5f);
+
+        var btnImg = btnGo.AddComponent<Image>();
+        btnImg.sprite = UiWhiteSprite();
+        var yellow = new Color(0.98f, 0.78f, 0.15f, 1f);
+        btnImg.color = yellow;
+        btnImg.raycastTarget = true;
+        _returnButton = btnGo.AddComponent<Button>();
+        _returnButton.targetGraphic = btnImg;
+        var colors = _returnButton.colors;
+        colors.normalColor = yellow;
+        colors.highlightedColor = new Color(1f, 0.9f, 0.35f, 1f);
+        colors.pressedColor = new Color(0.85f, 0.65f, 0.1f, 1f);
+        colors.disabledColor = new Color(0.6f, 0.55f, 0.45f, 0.55f);
+        _returnButton.colors = colors;
+        var nav = _returnButton.navigation;
+        nav.mode = Navigation.Mode.None;
+        _returnButton.navigation = nav;
+        _returnButton.onClick.AddListener(OnReturnToRoomClicked);
+
+        var btnLabelGo = new GameObject("Label", typeof(RectTransform));
+        btnLabelGo.transform.SetParent(btnGo.transform, false);
+        var lblRt = btnLabelGo.GetComponent<RectTransform>();
+        lblRt.anchorMin = Vector2.zero;
+        lblRt.anchorMax = Vector2.one;
+        lblRt.offsetMin = Vector2.zero;
+        lblRt.offsetMax = Vector2.zero;
+        _returnButtonCaption = btnLabelGo.AddComponent<Text>();
+        if (font != null)
+            _returnButtonCaption.font = font;
+        _returnButtonCaption.fontSize = 32;
+        _returnButtonCaption.fontStyle = FontStyle.Bold;
+        _returnButtonCaption.alignment = TextAnchor.MiddleCenter;
+        _returnButtonCaption.color = Color.white;
+        _returnButtonCaption.text = returnToRoomButtonLabel;
+        _returnButtonCaption.raycastTarget = false;
+
+        btnGo.SetActive(false);
         banner.transform.SetAsLastSibling();
         banner.SetActive(false);
     }

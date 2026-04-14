@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Fixed object: click during prep to toggle open/closed (window, toilet door, etc.).
+/// Room items only: left-click during prep toggles open/closed (window, toilet door, etc.).
 /// </summary>
 public class ToggleInteractable : MonoBehaviour
 {

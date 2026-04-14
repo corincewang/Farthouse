@@ -14,9 +14,9 @@ public class RoomCharacterWalk : MonoBehaviour
     [SerializeField] float minX = -8f;
     [SerializeField] float maxX = 8f;
 
-    [Tooltip("Depth bounds on Y (world space).")]
-    [SerializeField] float minY = -4f;
-    [SerializeField] float maxY = 1.2f;
+    [Tooltip("Depth bounds on Y (world space), e.g. -5 (far) … -0.9 (near).")]
+    [SerializeField] float minY = -5f;
+    [SerializeField] float maxY = -0.9f;
 
     [Header("Depth = scale (far = small, near = big)")]
     [SerializeField] float scaleAtMinY = 0.55f;

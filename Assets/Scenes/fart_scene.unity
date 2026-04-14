@@ -177,8 +177,8 @@ SpriteRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: -397699061
+  m_SortingLayer: -1
   m_SortingOrder: 0
   m_Sprite: {fileID: 21300000, guid: 60a6b17eb8cb2415da6a45f3ac5c9ab0, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -287,7 +287,7 @@ Transform:
   m_GameObject: {fileID: 49676039}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.38, y: 2.63, z: 0}
+  m_LocalPosition: {x: 4.38, y: 2.4, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -458,6 +458,8 @@ MonoBehaviour:
   mediumMessage: Made a medium fart.
   loudMessage: Made a loud fart.
   continuePromptMessage: Press SPACE to continue.
+  secondsResultMessageOnly: 6
+  pressSpaceToFartMessage: Press SPACE to fart.
   fartClip: {fileID: 0}
   quietVolume: 0.12
   loudVolume: 1

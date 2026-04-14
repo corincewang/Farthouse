@@ -149,6 +149,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   createSessionIfMissing: 1
+  countdownLabel: {fileID: 0}
+  roundLabel: {fileID: 0}
+  playerTransform: {fileID: 968315994}
+  defaultLocation: 0
+  locationAnchors:
+  - location: 6
+    point: {fileID: 703932474}
+    radius: 3
+  - location: 4
+    point: {fileID: 2017856796}
+    radius: 3
 --- !u!4 &167881528
 Transform:
   m_ObjectHideFlags: 0
@@ -245,7 +256,7 @@ Transform:
   m_GameObject: {fileID: 313558722}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.4865, y: -0.5023, z: 0}
+  m_LocalPosition: {x: -3.4865, y: -1.22, z: 0}
   m_LocalScale: {x: 1.308, y: 1.2095, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -815,7 +826,7 @@ Transform:
   m_GameObject: {fileID: 968315992}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.22, y: -4.59, z: 5}
+  m_LocalPosition: {x: 0.88, y: -4.55, z: 5}
   m_LocalScale: {x: 1.0482271, y: 0.81020546, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -833,11 +844,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b96fdc50f3804f678f45d69dc306ab6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 3
+  moveSpeed: 4
   minX: -8
   maxX: 8
-  minY: -4
-  maxY: 1.2
+  minY: -5
+  maxY: -0.9
   scaleAtMinY: 0.55
   scaleAtMaxY: 1.15
   largerTowardMaxY: 1
@@ -990,8 +1001,8 @@ SpriteRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: -397699061
+  m_SortingLayer: -1
   m_SortingOrder: 0
   m_Sprite: {fileID: 4211201310020970577, guid: a4a6a62804fa2477291fe4ea2078243e, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}

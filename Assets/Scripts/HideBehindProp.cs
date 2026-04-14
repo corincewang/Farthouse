@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Fixed prop (e.g. plant): click during prep to hide / show the player behind it (lower sprite sorting order).
-/// Assign the character's SpriteRenderer; plant stays put.
+/// Room items only: left-click during prep toggles hiding the player behind this prop (sorting order).
 /// </summary>
 public class HideBehindProp : MonoBehaviour
 {
