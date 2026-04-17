@@ -57,7 +57,6 @@ public class HideBehindProp : MonoBehaviour
         ApplyHideVisual();
         if (FartGameSession.Instance != null)
             FartGameSession.Instance.SetCurrentRoundHidingBehindPlant(_hiding);
-        Debug.Log(_hiding ? "[Farthouse] Hiding behind plant." : "[Farthouse] Left the plant (no longer hiding).");
     }
 
     void ApplyHideVisual()

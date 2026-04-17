@@ -2,10 +2,11 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// Put in ending_scene only. Shows one ending CG by key from <see cref="FartGameSession"/>,
-/// Home: assign <see cref="homeButton"/> in-scene, or <see cref="homeButtonPrefab"/>, or rely on runtime UI.
+/// Restart: assign <see cref="homeButton"/> in-scene, or <see cref="homeButtonPrefab"/>, or rely on runtime UI.
 /// </summary>
 public class EndingSceneController : MonoBehaviour
 {
@@ -21,20 +22,20 @@ public class EndingSceneController : MonoBehaviour
     [SerializeField] string fallbackEndingKey = "EndingCleanQuiet";
     [SerializeField] string initialSceneName = "initial_scene";
 
-    [Header("Home button (pick one)")]
+    [Header("Restart button (pick one)")]
     [Tooltip("Drag a Button from the scene hierarchy — position/size in the RectTransform as you like.")]
     [SerializeField] Button homeButton;
 
-    [Tooltip("If Home Button is empty, instantiate this prefab (root or child must have a Button).")]
+    [Tooltip("If Restart Button is empty, instantiate this prefab (root or child must have a Button).")]
     [SerializeField] GameObject homeButtonPrefab;
 
     [Tooltip("Parent for the prefab instance. If null, uses this object’s transform (prefer a Canvas under your UI).")]
     [SerializeField] Transform homeButtonParent;
 
-    [Tooltip("Only used by the built-in runtime button (not for your prefab/scene Button text).")]
-    [SerializeField] string homeButtonLabel = "Home";
+    [Tooltip("Caption for scene/prefab/runtime button (TMP or legacy Text under the button).")]
+    [SerializeField] string homeButtonLabel = "Restart";
 
-    [Tooltip("If no Home Button and no prefab: create the default yellow runtime button.")]
+    [Tooltip("If no Restart Button and no prefab: create the default yellow runtime button.")]
     [SerializeField] bool createHomeButtonIfMissing = true;
 
     void Awake()
@@ -64,8 +65,6 @@ public class EndingSceneController : MonoBehaviour
                 homeButton.onClick.RemoveListener(BackToHome);
                 homeButton.onClick.AddListener(BackToHome);
             }
-            else
-                Debug.LogWarning("[Farthouse] homeButtonPrefab has no Button on root or children.");
 
             return;
         }
@@ -88,12 +87,33 @@ public class EndingSceneController : MonoBehaviour
             key = session.FinalEndingKey;
 
         ApplyEndingVisual(key);
+        ApplyHomeButtonCaption();
 
         if (homeButton != null && EventSystem.current != null)
             EventSystem.current.SetSelectedGameObject(homeButton.gameObject);
     }
 
-    /// <summary>Loads the home / menu scene (<see cref="initialSceneName"/>).</summary>
+    void ApplyHomeButtonCaption()
+    {
+        if (homeButton == null) return;
+
+        var tmp = homeButton.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (tmp != null)
+        {
+            tmp.text = homeButtonLabel;
+            tmp.fontSize = 52f;
+            return;
+        }
+
+        var leg = homeButton.GetComponentInChildren<Text>(true);
+        if (leg != null)
+        {
+            leg.text = homeButtonLabel;
+            leg.fontSize = 52;
+        }
+    }
+
+    /// <summary>Restarts the run via <see cref="FartGameSession.StartNewGame"/> when session exists.</summary>
     public void BackToHome()
     {
         if (FartGameSession.Instance != null)
@@ -150,7 +170,7 @@ public class EndingSceneController : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
-        var btnGo = new GameObject("HomeButton", typeof(RectTransform));
+        var btnGo = new GameObject("RestartButton", typeof(RectTransform));
         btnGo.transform.SetParent(canvasGo.transform, false);
         var btnRt = btnGo.GetComponent<RectTransform>();
         // Narrower band, shifted toward the right.
@@ -187,7 +207,7 @@ public class EndingSceneController : MonoBehaviour
         var txt = labelGo.AddComponent<Text>();
         var font = BuiltinUiFont();
         if (font != null) txt.font = font;
-        txt.fontSize = 34;
+        txt.fontSize = 52;
         txt.fontStyle = FontStyle.Bold;
         txt.alignment = TextAnchor.MiddleCenter;
         txt.color = Color.white;

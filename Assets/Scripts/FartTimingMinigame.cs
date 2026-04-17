@@ -53,9 +53,17 @@ public class FartTimingMinigame : MonoBehaviour
     [Tooltip("If off, the meter never times out — you only commit with SPACE or left-click.")]
     [SerializeField] bool commitWhenFartPhaseTimesOut = false;
 
-    [Header("Audio")]
-    [SerializeField] AudioClip fartClip;
-    [SerializeField] float quietVolume = 0.12f;
+    [Header("Audio (after commit)")]
+    [Tooltip("Played when meter is below resultLoudQuietSplit.")]
+    [SerializeField] AudioClip quietFartClip;
+    [Tooltip("Played when meter is at or above resultLoudQuietSplit.")]
+    [SerializeField] AudioClip loudFartClip;
+    [Tooltip("If a clip is longer, playback stops after this many seconds.")]
+    [SerializeField] float fartSoundMaxSeconds = 3f;
+
+    [Tooltip("After Space/click commits, wait this long (realtime) before playing the fart clip.")]
+    [SerializeField] float fartSoundDelayAfterCommitSeconds = 0.5f;
+    [SerializeField] float quietVolume = 0.35f;
     [SerializeField] float loudVolume = 1f;
 
     [Header("Cursor look")]
@@ -82,6 +90,8 @@ public class FartTimingMinigame : MonoBehaviour
     Text _returnButtonCaption;
     bool _leftFartScene;
     Coroutine _armReturnButtonCoroutine;
+    Coroutine _stopFartAudioCoroutine;
+    Coroutine _delayedFartSoundCoroutine;
 
     static Sprite _uiSprite;
 
@@ -162,6 +172,21 @@ public class FartTimingMinigame : MonoBehaviour
             _armReturnButtonCoroutine = null;
         }
 
+        if (_stopFartAudioCoroutine != null)
+        {
+            StopCoroutine(_stopFartAudioCoroutine);
+            _stopFartAudioCoroutine = null;
+        }
+
+        if (_delayedFartSoundCoroutine != null)
+        {
+            StopCoroutine(_delayedFartSoundCoroutine);
+            _delayedFartSoundCoroutine = null;
+        }
+
+        if (_audio != null)
+            _audio.Stop();
+
         _session = session;
         if (_session == null) return;
 
@@ -226,9 +251,6 @@ public class FartTimingMinigame : MonoBehaviour
         {
             if (_session != null)
                 Commit();
-            else if (SpaceOrPrimaryClickDown())
-                Debug.LogWarning(
-                    "[Farthouse] No FartGameSession — start Play from initial_scene (not fart_scene alone), or add FartGameSession to the run.");
         }
     }
 
@@ -264,9 +286,9 @@ public class FartTimingMinigame : MonoBehaviour
         if (_aimPromptRoot != null)
             _aimPromptRoot.SetActive(false);
 
-        float vol = Mathf.Lerp(quietVolume, loudVolume, CommittedLoudness01);
-        if (fartClip != null && _audio != null)
-            _audio.PlayOneShot(fartClip, vol);
+        if (_delayedFartSoundCoroutine != null)
+            StopCoroutine(_delayedFartSoundCoroutine);
+        _delayedFartSoundCoroutine = StartCoroutine(PlayCommittedFartSoundAfterDelay());
 
         ShowResultAfterCommit(CommittedLoudness01);
         RefreshReturnButtonCaption();
@@ -284,6 +306,46 @@ public class FartTimingMinigame : MonoBehaviour
                 _armReturnButtonCoroutine = StartCoroutine(ArmReturnButtonAfterCommitInputReleased());
             }
         }
+    }
+
+    IEnumerator PlayCommittedFartSoundAfterDelay()
+    {
+        float wait = Mathf.Max(0f, fartSoundDelayAfterCommitSeconds);
+        if (wait > 0f)
+            yield return new WaitForSecondsRealtime(wait);
+        _delayedFartSoundCoroutine = null;
+        PlayCommittedFartSound();
+    }
+
+    void PlayCommittedFartSound()
+    {
+        if (_audio == null)
+            return;
+
+        bool loud = CommittedLoudness01 >= resultLoudQuietSplit;
+        AudioClip clip = loud ? loudFartClip : quietFartClip;
+        if (clip == null)
+            return;
+
+        float vol = loud ? loudVolume : quietVolume;
+        _audio.Stop();
+        _audio.clip = clip;
+        _audio.volume = vol;
+        _audio.time = 0f;
+        _audio.Play();
+
+        float cap = Mathf.Min(Mathf.Max(0.01f, fartSoundMaxSeconds), clip.length);
+        if (_stopFartAudioCoroutine != null)
+            StopCoroutine(_stopFartAudioCoroutine);
+        _stopFartAudioCoroutine = StartCoroutine(StopFartAudioAfter(cap));
+    }
+
+    IEnumerator StopFartAudioAfter(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+        _stopFartAudioCoroutine = null;
+        if (_audio != null && _audio.isPlaying)
+            _audio.Stop();
     }
 
     IEnumerator ArmReturnButtonAfterCommitInputReleased()
@@ -322,7 +384,6 @@ public class FartTimingMinigame : MonoBehaviour
         if (_resultBannerRoot != null)
             _resultBannerRoot.SetActive(true);
         _guiResultBackup = _resultText.font == null ? msg : null;
-        Debug.Log("[Farthouse] Fart result: " + msg);
     }
 
     void OnGUI()
@@ -330,7 +391,7 @@ public class FartTimingMinigame : MonoBehaviour
         if (string.IsNullOrEmpty(_guiResultBackup)) return;
         var style = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 26,
+            fontSize = 34,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true,
             normal = { textColor = Color.white }
@@ -392,7 +453,7 @@ public class FartTimingMinigame : MonoBehaviour
         var font = BuiltinUiFont();
         if (font != null)
             _aimPromptText.font = font;
-        _aimPromptText.fontSize = 30;
+        _aimPromptText.fontSize = 44;
         _aimPromptText.fontStyle = FontStyle.Bold;
         _aimPromptText.alignment = TextAnchor.MiddleCenter;
         _aimPromptText.color = Color.white;
@@ -533,9 +594,7 @@ public class FartTimingMinigame : MonoBehaviour
         var font = BuiltinUiFont();
         if (font != null)
             _resultText.font = font;
-        else
-            Debug.LogWarning("[Farthouse] No UI font found — result uses IMGUI fallback. Assign a Font asset on a prefab or install standard Unity resources.");
-        _resultText.fontSize = 30;
+        _resultText.fontSize = 42;
         _resultText.fontStyle = FontStyle.Bold;
         _resultText.alignment = TextAnchor.MiddleCenter;
         _resultText.color = Color.white;
@@ -586,7 +645,7 @@ public class FartTimingMinigame : MonoBehaviour
         _returnButtonCaption = btnLabelGo.AddComponent<Text>();
         if (font != null)
             _returnButtonCaption.font = font;
-        _returnButtonCaption.fontSize = 24;
+        _returnButtonCaption.fontSize = 36;
         _returnButtonCaption.fontStyle = FontStyle.Bold;
         _returnButtonCaption.alignment = TextAnchor.MiddleCenter;
         _returnButtonCaption.color = Color.white;

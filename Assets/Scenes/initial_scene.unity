@@ -177,8 +177,8 @@ SpriteRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: 11285635
+  m_SortingLayer: 1
   m_SortingOrder: 0
   m_Sprite: {fileID: 21300000, guid: ed58eeb9730bb47ad8237357c60c06e6, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -200,7 +200,7 @@ Transform:
   m_GameObject: {fileID: 52706540}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.29, y: -0.83, z: 1}
+  m_LocalPosition: {x: 0.29, y: 0.26, z: 1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -244,6 +244,12 @@ MonoBehaviour:
   endingSceneName: ending_scene
   statusLabel: {fileID: 0}
   timerLabel: {fileID: 0}
+  roomWhiteNoiseClip: {fileID: 8300000, guid: 91a76d1eefef04e748cf282332420d97, type: 3}
+  roomWhiteNoiseVolume: 0.35
+  windowOpenSmellReduction: 0.12
+  toiletSmellReduction: 0.25
+  plantHideSmellReduction: 0.15
+  plantOpenProximitySmellReduction: 0.15
   loudQuietSplitThreshold: 0.5
   loudEndingKey: fartendo
   quietWindowClosedEndingKey: smell_quiet

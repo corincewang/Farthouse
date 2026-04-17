@@ -24,6 +24,11 @@ public class FartGameSession : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text statusLabel;
     [SerializeField] UnityEngine.UI.Text timerLabel;
 
+    [Header("Room ambience (SoundManager)")]
+    [Tooltip("Looped while room_scene is loaded. Assign your white noise clip here.")]
+    [SerializeField] AudioClip roomWhiteNoiseClip;
+    [SerializeField] [Range(0f, 1f)] float roomWhiteNoiseVolume = 0.35f;
+
     public float PrepDurationSeconds => prepDurationSeconds;
     public float FartPhaseDurationSeconds => fartPhaseDurationSeconds;
 
@@ -37,6 +42,10 @@ public class FartGameSession : MonoBehaviour
     bool _currentRoundHidingBehindPlant;
     bool _forceToiletBlockedThisRound;
     bool _blockToiletNextRound;
+    /// <summary>Rolled once when room prep starts: if false, toilet stays “occupied” for the whole 15s.</summary>
+    bool _toiletRollAllowsEntry;
+    bool _liveOpenPlantProximitySmell;
+    bool _snapOpenPlantProximitySmellForFart;
 
     [Header("Smell reduction")]
     [Range(0f, 1f)]
@@ -45,6 +54,10 @@ public class FartGameSession : MonoBehaviour
     [SerializeField] float toiletSmellReduction = 0.25f;
     [Range(0f, 1f)]
     [SerializeField] float plantHideSmellReduction = 0.15f;
+
+    [Tooltip("Prep ended while plant was open and player was inside proximity hide zone (see PlantOpenProximityHide).")]
+    [Range(0f, 1f)]
+    [SerializeField] float plantOpenProximitySmellReduction = 0.15f;
 
     [Header("Ending rules (binary fart, keys must match ending_scene)")]
     [Tooltip("Meter value ≥ this counts as loud; below counts as quiet.")]
@@ -125,12 +138,28 @@ public class FartGameSession : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         EnsureUiSpaceSubmit();
+        EnsureSoundManager();
     }
 
     void EnsureUiSpaceSubmit()
     {
         if (GetComponent<UiSpaceSubmitOnKey>() == null)
             gameObject.AddComponent<UiSpaceSubmitOnKey>();
+    }
+
+    void EnsureSoundManager()
+    {
+        var existing = GetComponentInChildren<SoundManager>(true);
+        if (existing != null)
+        {
+            existing.Configure(roomSceneName, roomWhiteNoiseClip, roomWhiteNoiseVolume);
+            return;
+        }
+
+        var go = new GameObject("SoundManager");
+        go.transform.SetParent(transform, false);
+        var sm = go.AddComponent<SoundManager>();
+        sm.Configure(roomSceneName, roomWhiteNoiseClip, roomWhiteNoiseVolume);
     }
 
     void OnDestroy()
@@ -173,13 +202,23 @@ public class FartGameSession : MonoBehaviour
         _currentRoundHidingBehindPlant = hiding;
     }
 
+    /// <summary>Live prep flag: plant open + player in proximity (see <see cref="PlantOpenProximityHide"/>).</summary>
+    public void SetLiveOpenPlantProximitySmell(bool eligible)
+    {
+        _liveOpenPlantProximitySmell = eligible;
+    }
+
+    /// <summary>Call once when room prep ends, before fart scene, so smell reduction matches last prep geometry.</summary>
+    public void SnapshotOpenPlantProximitySmellFromPrepEnd()
+    {
+        _snapOpenPlantProximitySmellForFart = _liveOpenPlantProximitySmell;
+    }
+
     public bool TryEnterToiletThisRound()
     {
         if (_currentRoundInToilet) return true;
-        if (_forceToiletBlockedThisRound) return false;
-
-        bool canEnter = UnityEngine.Random.value < 0.5f;
-        if (!canEnter) return false;
+        if (!_toiletRollAllowsEntry)
+            return false;
 
         _currentRoundInToilet = true;
         _blockToiletNextRound = true;
@@ -193,6 +232,7 @@ public class FartGameSession : MonoBehaviour
         if (_currentRoundWindowOpen) total += windowOpenSmellReduction;
         if (_currentRoundInToilet) total += toiletSmellReduction;
         if (_currentRoundHidingBehindPlant) total += plantHideSmellReduction;
+        if (_snapOpenPlantProximitySmellForFart) total += plantOpenProximitySmellReduction;
         return Mathf.Clamp01(total);
     }
 
@@ -210,6 +250,9 @@ public class FartGameSession : MonoBehaviour
         _currentRoundHidingBehindPlant = false;
         _forceToiletBlockedThisRound = false;
         _blockToiletNextRound = false;
+        _toiletRollAllowsEntry = false;
+        _liveOpenPlantProximitySmell = false;
+        _snapOpenPlantProximitySmellForFart = false;
         LoadRoomScene();
     }
 
@@ -274,6 +317,12 @@ public class FartGameSession : MonoBehaviour
         _currentRoundInToilet = false;
         _currentRoundHidingBehindPlant = false;
         _currentRoundWindowOpen = false;
+        if (_forceToiletBlockedThisRound)
+            _toiletRollAllowsEntry = false;
+        else
+            _toiletRollAllowsEntry = UnityEngine.Random.value < 0.5f;
+        _liveOpenPlantProximitySmell = false;
+        _snapOpenPlantProximitySmellForFart = false;
         if (_scheduleRoomPrepAnchor)
         {
             _scheduleRoomPrepAnchor = false;
@@ -353,7 +402,8 @@ public class FartGameSession : MonoBehaviour
             location = CurrentRoundLocation,
             loudness01 = LastFartLoudness01,
             windowOpen = _currentRoundWindowOpen,
-            nearPlant = _currentRoundHidingBehindPlant || CurrentRoundLocation == FartLocation.Plant
+            nearPlant = _currentRoundHidingBehindPlant || CurrentRoundLocation == FartLocation.Plant ||
+                      _snapOpenPlantProximitySmellForFart
         });
     }
 

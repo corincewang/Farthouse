@@ -12,7 +12,6 @@ public class FartSceneController : MonoBehaviour
         var session = FartGameSession.Instance;
         if (session == null)
         {
-            Debug.LogWarning("[Farthouse] FartSceneController: no FartGameSession. Load from initial_scene or add session.");
             enabled = false;
             return;
         }

@@ -455,15 +455,16 @@ MonoBehaviour:
   resultLoudQuietSplit: 0.5
   quietMessage: Made a quiet fart.
   loudMessage: Made a loud fart.
-  continuePromptMessage: Press SPACE to continue.
-  secondsResultMessageOnly: 6
-  pressSpaceToFartMessage: Press SPACE to fart.
-  fartClip: {fileID: 0}
-  quietVolume: 0.12
+  returnToRoomButtonLabel: Return to room
+  endRunButtonLabel: Continue to ending
+  aimClickPromptMessage: Press SPACE to fart.
+  commitWhenFartPhaseTimesOut: 0
+  quietFartClip: {fileID: 8300000, guid: cbb346f2786444deba24e012a4455e95, type: 3}
+  loudFartClip: {fileID: 8300000, guid: 93223f83825b04a57971fa8170aa8774, type: 3}
+  fartSoundMaxSeconds: 3
+  quietVolume: 0.35
   loudVolume: 1
-  requireReleaseBeforeContinue: 1
-  minSecondsBeforeContinue: 3.5
-  cursorColor: {r: 0.62, g: 0.55, b: 0.06, a: 1}
+  cursorColor: {r: 0.8207547, g: 0.73449916, b: 0.13550194, a: 1}
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0

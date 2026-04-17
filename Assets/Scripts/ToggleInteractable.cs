@@ -35,7 +35,6 @@ public class ToggleInteractable : MonoBehaviour
     [SerializeField] float toiletEnterHintSeconds = 1.4f;
     [Tooltip("If null, uses GameObject with tag Player.")]
     [SerializeField] GameObject characterRootToHide;
-    [SerializeField] string toiletEnterLogMessage = "Entered toilet.";
 
     Collider2D _collider;
     bool _isOpen;
@@ -116,7 +115,6 @@ public class ToggleInteractable : MonoBehaviour
             if (canEnter)
             {
                 ShowToiletEnterHint(true);
-                Debug.Log("[Farthouse] " + toiletEnterLogMessage);
                 HideCharacterForToilet();
             }
 

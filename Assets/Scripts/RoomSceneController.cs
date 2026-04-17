@@ -1,17 +1,18 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// Put in <b>room_scene</b> only. Prep countdown uses <see cref="FartGameSession.GetRoomPrepRemainingSeconds"/> (wall-clock).
-/// Left mouse in this scene is only for <see cref="ToggleInteractable"/> / <see cref="HideBehindProp"/> item hits — this script does not read mouse input.
+/// Left mouse in this scene is only for <see cref="ToggleInteractable"/> / <see cref="HideBehindProp"/> / <see cref="PlantOpenProximityHide"/> item hits — this script does not read mouse input.
 /// </summary>
 public class RoomSceneController : MonoBehaviour
 {
     [SerializeField] bool createSessionIfMissing = true;
     [Tooltip("If null, a small overlay is created at runtime showing countdown until fart.")]
-    [SerializeField] Text countdownLabel;
-    [SerializeField] Text roundLabel;
+    [SerializeField] TextMeshProUGUI countdownLabel;
+    [SerializeField] TextMeshProUGUI roundLabel;
     [SerializeField] Transform playerTransform;
     [SerializeField] FartGameSession.FartLocation defaultLocation = FartGameSession.FartLocation.None;
 
@@ -30,9 +31,15 @@ public class RoomSceneController : MonoBehaviour
     [SerializeField] ToggleInteractable windowForEndingSnapshot;
 
     bool _ended;
-    Text _runtimeCountdown;
-    const int CountdownBaseFontSize = 52;
+    TextMeshProUGUI _runtimeFartInPrefix;
+    TextMeshProUGUI _runtimeSecondsDigits;
+    TextMeshProUGUI _runtimeSecondsSuffix;
+    const float CountdownFartInFontSize = 38f;
+    const float CountdownSecondsBaseFontSize = 38f;
+    const float CountdownSecondsRampStep = 12f;
     static readonly Color MutedRed = new Color(0.82f, 0.36f, 0.36f, 1f);
+    /// <summary>Non-breaking spaces so "Fart in" never wraps across lines in a narrow RectTransform.</summary>
+    const string CountdownPrefixNoBreak = "Fart\u00A0in\u00A0";
 
     void Awake()
     {
@@ -79,13 +86,18 @@ public class RoomSceneController : MonoBehaviour
         if (remaining > 0f || _ended) return;
 
         _ended = true;
+        foreach (var plant in Object.FindObjectsByType<PlantOpenProximityHide>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            plant.RefreshSmellEligibilityNow();
+        session.SnapshotOpenPlantProximitySmellFromPrepEnd();
+
         if (session.CurrentRoundInToilet)
             session.SetCurrentRoundFartLocation(FartGameSession.FartLocation.RestroomSafe);
         else
             session.SetCurrentRoundFartLocation(ResolveCurrentLocation());
         if (windowForEndingSnapshot != null)
             session.SetCurrentRoundWindowOpen(windowForEndingSnapshot.IsOpen);
-        EnsurePlayerVisible();
+        if (!session.CurrentRoundInToilet)
+            EnsurePlayerVisible();
         session.CanInteractDuringPrep = false;
         session.NotifyRoomPrepEnded();
         enabled = false;
@@ -130,17 +142,25 @@ public class RoomSceneController : MonoBehaviour
     {
         float remaining = session.GetRoomPrepRemainingSeconds();
         int sec = Mathf.Max(0, Mathf.CeilToInt(remaining));
-        string countdownLine = $"Fart in {sec}s";
         if (roundLabel != null) roundLabel.text = string.Empty;
-        if (countdownLabel != null) countdownLabel.text = countdownLine;
-        if (_runtimeCountdown != null) _runtimeCountdown.text = countdownLine;
 
-        int enlargedSize = CountdownBaseFontSize;
-        if (sec <= 3 && sec > 0)
-            enlargedSize = CountdownBaseFontSize + (4 - sec) * 18;
-
-        if (countdownLabel != null) countdownLabel.fontSize = enlargedSize;
-        if (_runtimeCountdown != null) _runtimeCountdown.fontSize = enlargedSize;
+        if (_runtimeFartInPrefix != null && _runtimeSecondsDigits != null && _runtimeSecondsSuffix != null)
+        {
+            _runtimeFartInPrefix.text = CountdownPrefixNoBreak;
+            _runtimeSecondsDigits.text = sec.ToString();
+            _runtimeSecondsSuffix.text = "s";
+            _runtimeFartInPrefix.fontSize = CountdownFartInFontSize;
+            _runtimeSecondsSuffix.fontSize = CountdownFartInFontSize;
+            float numSize = CountdownSecondsBaseFontSize;
+            if (sec <= 3 && sec > 0)
+                numSize = CountdownSecondsBaseFontSize + (4 - sec) * CountdownSecondsRampStep;
+            _runtimeSecondsDigits.fontSize = numSize;
+        }
+        else if (countdownLabel != null)
+        {
+            countdownLabel.text = $"{CountdownPrefixNoBreak}{sec}s";
+            countdownLabel.fontSize = CountdownFartInFontSize;
+        }
     }
 
     void EnsureRoomCountdownOverlay()
@@ -152,8 +172,19 @@ public class RoomSceneController : MonoBehaviour
             es.AddComponent<StandaloneInputModule>();
         }
 
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var c = transform.GetChild(i);
+            if (c.name == "RoomPrepCountdownUI")
+                Destroy(c.gameObject);
+        }
+
+        var orphan = GameObject.Find("RoomPrepCountdownUI");
+        if (orphan != null && orphan.transform.parent == null)
+            Destroy(orphan);
+
         var canvasGo = new GameObject("RoomPrepCountdownUI");
-        canvasGo.transform.SetParent(null, false);
+        canvasGo.transform.SetParent(transform, false);
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 30000;
@@ -164,80 +195,98 @@ public class RoomSceneController : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
-        _runtimeCountdown = CreateHudLine(canvasGo.transform, "Countdown", CountdownBaseFontSize,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -72f),
-            new Vector2(1400f, 80f));
+        var rowGo = new GameObject("CountdownRow", typeof(RectTransform));
+        rowGo.transform.SetParent(canvasGo.transform, false);
+        var rowRt = rowGo.GetComponent<RectTransform>();
+        rowRt.anchorMin = new Vector2(0.5f, 1f);
+        rowRt.anchorMax = new Vector2(0.5f, 1f);
+        rowRt.pivot = new Vector2(0.5f, 1f);
+        rowRt.anchoredPosition = new Vector2(0f, -72f);
+        rowRt.sizeDelta = new Vector2(900f, 90f);
+        var hlg = rowGo.AddComponent<HorizontalLayoutGroup>();
+        hlg.childAlignment = TextAnchor.MiddleCenter;
+        hlg.spacing = 6f;
+        hlg.childControlWidth = false;
+        hlg.childControlHeight = false;
+        hlg.childForceExpandWidth = false;
+        hlg.childForceExpandHeight = false;
+
+        _runtimeFartInPrefix = CreateHudTmpInRow(rowGo.transform, "FartInPrefix", CountdownPrefixNoBreak, CountdownFartInFontSize, 150f);
+        _runtimeSecondsDigits = CreateHudTmpInRow(rowGo.transform, "SecondsDigits", "0", CountdownSecondsBaseFontSize, 96f);
+        _runtimeSecondsSuffix = CreateHudTmpInRow(rowGo.transform, "SecondsSuffix", "s", CountdownFartInFontSize, 22f);
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(rowRt);
     }
 
-    static Text CreateHudLine(Transform parent, string name, int fontSize,
-        Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos, Vector2 sizeDelta)
+    static TextMeshProUGUI CreateHudTmpInRow(Transform rowParent, string name, string initial, float fontSize, float layoutMinWidth = 0f)
     {
         var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent, false);
+        go.transform.SetParent(rowParent, false);
         var rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = anchorMin;
-        rt.anchorMax = anchorMax;
-        rt.pivot = new Vector2(0.5f, 1f);
-        rt.anchoredPosition = anchoredPos;
-        rt.sizeDelta = sizeDelta;
+        rt.sizeDelta = new Vector2(0f, 72f);
 
-        var text = go.AddComponent<Text>();
-        var font = BuiltinUiFont();
-        if (font != null) text.font = font;
-        text.fontSize = fontSize;
-        text.fontStyle = FontStyle.Bold;
-        text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.white;
-        text.horizontalOverflow = HorizontalWrapMode.Wrap;
-        text.verticalOverflow = VerticalWrapMode.Overflow;
-        var outline = go.AddComponent<Outline>();
-        outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
-        outline.effectDistance = new Vector2(2f, -2f);
-        return text;
+        var tmp = go.AddComponent<TextMeshProUGUI>();
+        ApplyDefaultTmpFont(tmp);
+        tmp.fontSize = fontSize;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.text = initial;
+        tmp.color = Color.white;
+        tmp.raycastTarget = false;
+        tmp.enableWordWrapping = false;
+        tmp.overflowMode = TextOverflowModes.Overflow;
+#if UNITY_2023_1_OR_NEWER
+        tmp.textWrappingMode = TextWrappingModes.NoWrap;
+#endif
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.margin = Vector4.zero;
+        tmp.outlineWidth = 0f;
+
+        var le = go.AddComponent<LayoutElement>();
+        le.minHeight = 56f;
+        le.preferredHeight = 72f;
+        le.flexibleWidth = 0f;
+        if (layoutMinWidth > 0f)
+            le.minWidth = layoutMinWidth;
+        var csf = go.AddComponent<ContentSizeFitter>();
+        csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        return tmp;
+    }
+
+    static void ApplyDefaultTmpFont(TextMeshProUGUI tmp)
+    {
+        if (TMP_Settings.defaultFontAsset != null)
+        {
+            tmp.font = TMP_Settings.defaultFontAsset;
+            return;
+        }
+
+        var fallback = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+        if (fallback != null)
+            tmp.font = fallback;
     }
 
     void PrepareCountdownStyle()
     {
-        ApplyHudTextStyle(countdownLabel);
-        ApplyHudTextStyle(_runtimeCountdown);
+        ApplyHudTmpStyle(countdownLabel);
+        ApplyHudTmpStyle(_runtimeFartInPrefix);
+        ApplyHudTmpStyle(_runtimeSecondsDigits);
+        ApplyHudTmpStyle(_runtimeSecondsSuffix);
         if (roundLabel != null)
-        {
             roundLabel.text = string.Empty;
-            var outline = roundLabel.GetComponent<Outline>();
-            if (outline != null) outline.enabled = false;
-        }
     }
 
-    static void ApplyHudTextStyle(Text label)
+    static void ApplyHudTmpStyle(TextMeshProUGUI label)
     {
         if (label == null) return;
         label.color = MutedRed;
-        label.alignment = TextAnchor.MiddleCenter;
-        var outline = label.GetComponent<Outline>();
-        if (outline != null) outline.enabled = false;
-    }
-
-    static Font BuiltinUiFont()
-    {
-        foreach (var path in new[] { "LegacyRuntime.ttf", "Arial.ttf" })
-        {
-            var f = Resources.GetBuiltinResource<Font>(path);
-            if (f != null) return f;
-        }
-
-        foreach (var name in new[] { "Arial", "Helvetica", "PingFang SC", "Heiti SC", "Microsoft YaHei", "SimHei" })
-        {
-            try
-            {
-                var f = Font.CreateDynamicFontFromOSFont(name, 64);
-                if (f != null) return f;
-            }
-            catch
-            {
-                // try next
-            }
-        }
-
-        return null;
+        label.alignment = TextAlignmentOptions.Center;
+        label.outlineWidth = 0f;
+        label.enableWordWrapping = false;
+        label.overflowMode = TextOverflowModes.Overflow;
+#if UNITY_2023_1_OR_NEWER
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+#endif
     }
 }
