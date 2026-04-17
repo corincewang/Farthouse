@@ -88,6 +88,9 @@ public class EndingSceneController : MonoBehaviour
             key = session.FinalEndingKey;
 
         ApplyEndingVisual(key);
+
+        if (homeButton != null && EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(homeButton.gameObject);
     }
 
     /// <summary>Loads the home / menu scene (<see cref="initialSceneName"/>).</summary>
@@ -95,7 +98,7 @@ public class EndingSceneController : MonoBehaviour
     {
         if (FartGameSession.Instance != null)
         {
-            FartGameSession.Instance.LoadInitialScene();
+            FartGameSession.Instance.StartNewGame();
             return;
         }
 

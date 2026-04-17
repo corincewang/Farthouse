@@ -3,15 +3,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 /// <summary>
-/// Persists across scenes (DontDestroyOnLoad). Flow is always
-/// <b>initial_scene → room_scene → fart_scene → … → ending_scene</b> (see <see cref="totalRounds"/>).
+/// Persists across scenes (DontDestroyOnLoad). Single play:
+/// <b>initial_scene → room_scene → fart_scene → ending_scene</b>; replay from ending or menu.
 /// Place one instance in <b>initial_scene</b>. Add all scenes to Build Settings.
 /// </summary>
 public class FartGameSession : MonoBehaviour
 {
     public static FartGameSession Instance { get; private set; }
 
-    [SerializeField] int totalRounds = 4;
     [SerializeField] float prepDurationSeconds = 15f;
     [SerializeField] float fartPhaseDurationSeconds = 6f;
 
@@ -25,8 +24,6 @@ public class FartGameSession : MonoBehaviour
     [SerializeField] UnityEngine.UI.Text statusLabel;
     [SerializeField] UnityEngine.UI.Text timerLabel;
 
-    public int CurrentRound { get; private set; } = 1;
-    public int TotalRounds => totalRounds;
     public float PrepDurationSeconds => prepDurationSeconds;
     public float FartPhaseDurationSeconds => fartPhaseDurationSeconds;
 
@@ -49,12 +46,18 @@ public class FartGameSession : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField] float plantHideSmellReduction = 0.15f;
 
-    [Header("Ending rules")]
-    [Tooltip("How many rounds must be loud (meter) to treat the run as a \"loud\" ending branch.")]
-    [SerializeField] int loudRoundsNeededForLoudRun = 3;
+    [Header("Ending rules (binary fart, keys must match ending_scene)")]
+    [Tooltip("Meter value ≥ this counts as loud; below counts as quiet.")]
+    [SerializeField] [Range(0f, 1f)] float loudQuietSplitThreshold = 0.5f;
 
-    [Tooltip("How many rounds with window open / at plant count as \"often\" for ending split.")]
-    [SerializeField] int contextualRoundsNeeded = 2;
+    [Tooltip("Loud fart → this ending key (e.g. fartendo).")]
+    [SerializeField] string loudEndingKey = "fartendo";
+
+    [Tooltip("Quiet fart with window closed → this ending key (e.g. smell_quiet).")]
+    [SerializeField] string quietWindowClosedEndingKey = "smell_quiet";
+
+    [Tooltip("Quiet fart with window open → ventilated / clean branch (e.g. fartendo).")]
+    [SerializeField] string quietWindowOpenEndingKey = "fartendo";
 
     /// <summary>True only during room_scene prep countdown.</summary>
     public bool CanInteractDuringPrep { get; internal set; }
@@ -84,14 +87,8 @@ public class FartGameSession : MonoBehaviour
     /// <summary>When true, the next <see cref="NotifyRoomSceneEntered"/> sets <see cref="_roomPrepEndTimeUnscaled"/>.
     /// Prevents a second <c>RoomSceneController</c> (or delayed <c>Start</c>) from resetting the timer on click.</summary>
     bool _scheduleRoomPrepAnchor = true;
-
-    /// <summary>True after a non-final fart: use for inter-round animation, then <see cref="ContinueToRoomPhase"/>.</summary>
-    bool _awaitingContinueToRoom;
-
-    /// <summary>True after the last round's fart: show end / replay on initial_scene.</summary>
-    bool _completedRunOnInitial;
     bool _runCompleted;
-    string _finalEndingKey = "EndingCleanQuiet";
+    string _finalEndingKey = "smell_quiet";
     readonly List<RoundRecord> _roundRecords = new List<RoundRecord>(8);
     bool _advanceLocked;
 
@@ -127,6 +124,13 @@ public class FartGameSession : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        EnsureUiSpaceSubmit();
+    }
+
+    void EnsureUiSpaceSubmit()
+    {
+        if (GetComponent<UiSpaceSubmitOnKey>() == null)
+            gameObject.AddComponent<UiSpaceSubmitOnKey>();
     }
 
     void OnDestroy()
@@ -134,8 +138,8 @@ public class FartGameSession : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
-    public bool AwaitingContinueToRoom => _awaitingContinueToRoom;
-    public bool CompletedRunAwaitingMenu => _completedRunOnInitial;
+    public bool AwaitingContinueToRoom => false;
+    public bool CompletedRunAwaitingMenu => false;
     public bool RunCompleted => _runCompleted;
     public string FinalEndingKey => _finalEndingKey;
     public IReadOnlyList<RoundRecord> RoundRecords => _roundRecords;
@@ -192,17 +196,14 @@ public class FartGameSession : MonoBehaviour
         return Mathf.Clamp01(total);
     }
 
-    /// <summary>New game from menu: round 1 → room_scene.</summary>
+    /// <summary>New game from menu or ending: reset run → room_scene.</summary>
     public void StartNewGame()
     {
-        _awaitingContinueToRoom = false;
-        _completedRunOnInitial = false;
         _runCompleted = false;
-        CurrentRound = 1;
         CurrentRoundLocation = FartLocation.None;
         LastFartLoudness01 = 0f;
         _roundRecords.Clear();
-        _finalEndingKey = "EndingCleanQuiet";
+        _finalEndingKey = "smell_quiet";
         _advanceLocked = false;
         _currentRoundWindowOpen = false;
         _currentRoundInToilet = false;
@@ -212,13 +213,8 @@ public class FartGameSession : MonoBehaviour
         LoadRoomScene();
     }
 
-    /// <summary>After inter-round animation on initial_scene, go to room for the current round.</summary>
-    public void ContinueToRoomPhase()
-    {
-        if (!_awaitingContinueToRoom || _completedRunOnInitial) return;
-        _awaitingContinueToRoom = false;
-        LoadRoomScene();
-    }
+    /// <summary>Legacy no-op (multi-round flow removed).</summary>
+    public void ContinueToRoomPhase() { }
 
     public void LoadInitialScene()
     {
@@ -253,39 +249,21 @@ public class FartGameSession : MonoBehaviour
         LoadFartScene();
     }
 
-    /// <summary>Legacy path: after fart, go to initial_scene and wait for <see cref="ContinueToRoomPhase"/>.</summary>
+    /// <summary>Legacy path: after fart, go straight to ending like <see cref="AcknowledgeFartResultAndContinue"/>.</summary>
     public void NotifyFartPhaseEnded()
     {
         CommitCurrentRoundResult();
-        if (CurrentRound >= totalRounds)
-        {
-            CompleteRunAndShowEnding();
-            return;
-        }
-
-        CurrentRound++;
-        _awaitingContinueToRoom = true;
-        _completedRunOnInitial = false;
-        LoadInitialScene();
+        CompleteRunAndShowEnding();
     }
 
-    /// <summary>After the player reads the fart result: next round → <b>room_scene</b>; final round → <b>initial_scene</b> (run complete).</summary>
+    /// <summary>After the player reads the fart result → <b>ending_scene</b>.</summary>
     public void AcknowledgeFartResultAndContinue()
     {
         if (_advanceLocked) return;
         _advanceLocked = true;
 
         CommitCurrentRoundResult();
-        if (CurrentRound >= totalRounds)
-        {
-            CompleteRunAndShowEnding();
-            return;
-        }
-
-        CurrentRound++;
-        _awaitingContinueToRoom = false;
-        _completedRunOnInitial = false;
-        LoadRoomScene();
+        CompleteRunAndShowEnding();
     }
 
     public void NotifyRoomSceneEntered()
@@ -302,7 +280,7 @@ public class FartGameSession : MonoBehaviour
             _roomPrepEndTimeUnscaled = Time.unscaledTime + prepDurationSeconds;
         }
 
-        RoomPrepStarted?.Invoke(CurrentRound);
+        RoomPrepStarted?.Invoke(1);
     }
 
     /// <summary>Remaining prep time from session clock (not reset by room clicks).</summary>
@@ -314,7 +292,7 @@ public class FartGameSession : MonoBehaviour
     public void NotifyFartSceneEntered()
     {
         _advanceLocked = false;
-        FartPhaseStarted?.Invoke(CurrentRound);
+        FartPhaseStarted?.Invoke(1);
     }
 
     internal void SetRoomPrepHud(float prepRemaining)
@@ -343,8 +321,8 @@ public class FartGameSession : MonoBehaviour
         string status = _hudMode switch
         {
             HudMode.Initial => InitialSceneStatusText(),
-            HudMode.RoomPrep => $"Round {CurrentRound}/{totalRounds} — get in position before you fart.",
-            HudMode.Fart => $"Round {CurrentRound}/{totalRounds} — FART!",
+            HudMode.RoomPrep => "Get in position before you fart.",
+            HudMode.Fart => "FART!",
             _ => ""
         };
 
@@ -363,19 +341,15 @@ public class FartGameSession : MonoBehaviour
 
     string InitialSceneStatusText()
     {
-        if (_completedRunOnInitial)
-            return "Run complete — left-click to play again.";
-        if (_awaitingContinueToRoom)
-            return $"Round {CurrentRound}/{totalRounds} — left-click to enter room.";
         return "Farthouse — left-click to start";
     }
 
     void CommitCurrentRoundResult()
     {
-        if (_roundRecords.Count >= CurrentRound) return;
+        if (_roundRecords.Count > 0) return;
         _roundRecords.Add(new RoundRecord
         {
-            roundIndex = CurrentRound,
+            roundIndex = 1,
             location = CurrentRoundLocation,
             loudness01 = LastFartLoudness01,
             windowOpen = _currentRoundWindowOpen,
@@ -385,8 +359,7 @@ public class FartGameSession : MonoBehaviour
 
     void CompleteRunAndShowEnding()
     {
-        _awaitingContinueToRoom = false;
-        _completedRunOnInitial = false;
+        if (_runCompleted) return;
         _runCompleted = true;
         _finalEndingKey = EvaluateEndingKey();
         GameCompleted?.Invoke();
@@ -396,46 +369,15 @@ public class FartGameSession : MonoBehaviour
     string EvaluateEndingKey()
     {
         if (_roundRecords.Count == 0)
-            return "EndingCleanQuiet";
+            return quietWindowClosedEndingKey;
 
-        int loudCount = 0;
-        int quietCount = 0;
-        int windowOpenRounds = 0;
-        int plantRounds = 0;
-
-        for (int i = 0; i < _roundRecords.Count; i++)
-        {
-            var r = _roundRecords[i];
-            if (r.loudness01 >= 0.66f) loudCount++;
-            else if (r.loudness01 <= 0.34f) quietCount++;
-            if (r.windowOpen) windowOpenRounds++;
-            if (r.nearPlant) plantRounds++;
-        }
-
-        int needLoud = Mathf.Clamp(loudRoundsNeededForLoudRun, 1, totalRounds);
-        int needCtx = Mathf.Clamp(contextualRoundsNeeded, 1, totalRounds);
-        bool loudRun = loudCount >= needLoud;
-        bool quietRun = quietCount >= needLoud;
-
-        if (loudRun)
-        {
-            if (plantRounds >= needCtx) return "EndingSmellLoud";
-            if (windowOpenRounds >= needCtx) return "EndingFartendo";
-            return "EndingSmellLoud";
-        }
-
-        if (quietRun)
-        {
-            if (plantRounds >= needCtx) return "EndingSmellQuiet";
-            if (windowOpenRounds >= needCtx) return "EndingCleanQuiet";
-            return "EndingSmellQuiet";
-        }
-
-        if (plantRounds >= needCtx) return "EndingSmellQuiet";
-        if (windowOpenRounds >= needCtx) return "EndingCleanQuiet";
-        if (loudCount > quietCount) return "EndingSmellLoud";
-        if (quietCount > loudCount) return "EndingCleanQuiet";
-        return "EndingSmellQuiet";
+        var r = _roundRecords[0];
+        bool loud = r.loudness01 >= loudQuietSplitThreshold;
+        if (loud)
+            return loudEndingKey;
+        if (r.windowOpen)
+            return quietWindowOpenEndingKey;
+        return quietWindowClosedEndingKey;
     }
 
 #if UNITY_EDITOR

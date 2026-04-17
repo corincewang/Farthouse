@@ -34,22 +34,9 @@ public class InitialSceneController : MonoBehaviour
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
-        var s = FartGameSession.Instance;
-        if (s == null)
+        if (FartGameSession.Instance == null)
         {
             StartGame();
-            return;
-        }
-
-        if (s.CompletedRunAwaitingMenu)
-        {
-            StartGame();
-            return;
-        }
-
-        if (s.AwaitingContinueToRoom)
-        {
-            ContinueToRoom();
             return;
         }
 

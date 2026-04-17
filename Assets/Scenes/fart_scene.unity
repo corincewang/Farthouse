@@ -452,10 +452,8 @@ MonoBehaviour:
   buttPanelWidthFraction: 0.44
   quietAnimalSprite: {fileID: 0}
   loudAnimalSprite: {fileID: 0}
-  quietLoudnessMax: 0.34
-  loudLoudnessMin: 0.66
+  resultLoudQuietSplit: 0.5
   quietMessage: Made a quiet fart.
-  mediumMessage: Made a medium fart.
   loudMessage: Made a loud fart.
   continuePromptMessage: Press SPACE to continue.
   secondsResultMessageOnly: 6

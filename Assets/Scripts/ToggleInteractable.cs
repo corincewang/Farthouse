@@ -29,9 +29,18 @@ public class ToggleInteractable : MonoBehaviour
     [SerializeField] bool autoFindToiletOccupiedVisual = true;
     [SerializeField] float toiletOccupiedHintSeconds = 1.25f;
 
+    [Header("Toilet entered (optional)")]
+    [SerializeField] GameObject toiletEnterMessageVisual;
+    [SerializeField] bool autoFindToiletEnterMessageVisual = true;
+    [SerializeField] float toiletEnterHintSeconds = 1.4f;
+    [Tooltip("If null, uses GameObject with tag Player.")]
+    [SerializeField] GameObject characterRootToHide;
+    [SerializeField] string toiletEnterLogMessage = "Entered toilet.";
+
     Collider2D _collider;
     bool _isOpen;
     Coroutine _occupiedHintRoutine;
+    Coroutine _enterHintRoutine;
 
     public bool IsOpen => _isOpen;
 
@@ -58,28 +67,40 @@ public class ToggleInteractable : MonoBehaviour
 
         if (interactableKind == InteractableKind.ToiletDoor && toiletOccupiedVisual == null && autoFindToiletOccupiedVisual)
             toiletOccupiedVisual = TryAutoFindToiletOccupiedVisual();
+        if (interactableKind == InteractableKind.ToiletDoor && toiletEnterMessageVisual == null && autoFindToiletEnterMessageVisual)
+            toiletEnterMessageVisual = TryAutoFindToiletEnterMessageVisual();
 
         ApplyVisual();
         if (toiletOccupiedVisual != null)
             toiletOccupiedVisual.SetActive(false);
+        if (toiletEnterMessageVisual != null)
+            toiletEnterMessageVisual.SetActive(false);
     }
 
     void Update()
     {
         if (FartGameSession.Instance == null || !FartGameSession.Instance.CanInteractDuringPrep) return;
-        if (targetCamera == null || _collider == null) return;
+        if (targetCamera == null) return;
         if (!Input.GetMouseButtonDown(0)) return;
 
         Vector2 world = FartMouseUtility.ScreenToWorld2D(targetCamera, Input.mousePosition, transform.position.z);
         Collider2D hit = Physics2D.OverlapPoint(world, interactLayers);
-        bool clickedSelf = hit != null && hit == _collider;
-        if (!clickedSelf)
+        bool clickedSelf = IsHitOnThisInteractable(hit);
+        if (!clickedSelf && _collider != null)
             clickedSelf = _collider.OverlapPoint(world);
 
         if (clickedSelf)
         {
             HandleInteract();
         }
+    }
+
+    bool IsHitOnThisInteractable(Collider2D hit)
+    {
+        if (hit == null) return false;
+        if (hit == _collider) return true;
+        Transform t = hit.transform;
+        return t == transform || t.IsChildOf(transform);
     }
 
     void HandleInteract()
@@ -92,6 +113,13 @@ public class ToggleInteractable : MonoBehaviour
             bool canEnter = session.TryEnterToiletThisRound();
             _isOpen = canEnter;
             ShowToiletOccupiedHint(!canEnter);
+            if (canEnter)
+            {
+                ShowToiletEnterHint(true);
+                Debug.Log("[Farthouse] " + toiletEnterLogMessage);
+                HideCharacterForToilet();
+            }
+
             ApplyVisual();
             return;
         }
@@ -134,6 +162,57 @@ public class ToggleInteractable : MonoBehaviour
         if (toiletOccupiedVisual != null)
             toiletOccupiedVisual.SetActive(false);
         _occupiedHintRoutine = null;
+    }
+
+    void ShowToiletEnterHint(bool show)
+    {
+        if (toiletEnterMessageVisual == null) return;
+
+        if (_enterHintRoutine != null)
+        {
+            StopCoroutine(_enterHintRoutine);
+            _enterHintRoutine = null;
+        }
+
+        toiletEnterMessageVisual.SetActive(show);
+        if (!show) return;
+
+        float wait = Mathf.Max(0.1f, toiletEnterHintSeconds);
+        _enterHintRoutine = StartCoroutine(HideToiletEnterHintAfter(wait));
+    }
+
+    System.Collections.IEnumerator HideToiletEnterHintAfter(float seconds)
+    {
+        yield return new WaitForSeconds(seconds);
+        if (toiletEnterMessageVisual != null)
+            toiletEnterMessageVisual.SetActive(false);
+        _enterHintRoutine = null;
+    }
+
+    void HideCharacterForToilet()
+    {
+        GameObject root = characterRootToHide;
+        if (root == null)
+        {
+            var tagged = GameObject.FindGameObjectWithTag("Player");
+            if (tagged != null) root = tagged;
+        }
+
+        if (root != null)
+            root.SetActive(false);
+    }
+
+    GameObject TryAutoFindToiletEnterMessageVisual()
+    {
+        foreach (var tr in GetComponentsInChildren<Transform>(true))
+        {
+            if (tr == null || tr.gameObject == gameObject) continue;
+            string n = tr.gameObject.name.ToLowerInvariant();
+            if (n.Contains("enter") || n.Contains("toilet_in") || n.Contains("inside") || n.Contains("success"))
+                return tr.gameObject;
+        }
+
+        return null;
     }
 
     GameObject TryAutoFindToiletOccupiedVisual()

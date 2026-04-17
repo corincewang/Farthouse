@@ -31,7 +31,8 @@ public class RoomSceneController : MonoBehaviour
 
     bool _ended;
     Text _runtimeCountdown;
-    Text _runtimeRound;
+    const int CountdownBaseFontSize = 52;
+    static readonly Color MutedRed = new Color(0.82f, 0.36f, 0.36f, 1f);
 
     void Awake()
     {
@@ -61,6 +62,9 @@ public class RoomSceneController : MonoBehaviour
             var tagged = GameObject.FindGameObjectWithTag("Player");
             if (tagged != null) playerTransform = tagged.transform;
         }
+
+        EnsurePlayerVisible();
+        PrepareCountdownStyle();
     }
 
     void Update()
@@ -79,7 +83,9 @@ public class RoomSceneController : MonoBehaviour
             session.SetCurrentRoundFartLocation(FartGameSession.FartLocation.RestroomSafe);
         else
             session.SetCurrentRoundFartLocation(ResolveCurrentLocation());
-        session.SetCurrentRoundWindowOpen(windowForEndingSnapshot != null && windowForEndingSnapshot.IsOpen);
+        if (windowForEndingSnapshot != null)
+            session.SetCurrentRoundWindowOpen(windowForEndingSnapshot.IsOpen);
+        EnsurePlayerVisible();
         session.CanInteractDuringPrep = false;
         session.NotifyRoomPrepEnded();
         enabled = false;
@@ -107,16 +113,34 @@ public class RoomSceneController : MonoBehaviour
         return best;
     }
 
+    void EnsurePlayerVisible()
+    {
+        Transform t = playerTransform;
+        if (t == null)
+        {
+            var go = GameObject.FindGameObjectWithTag("Player");
+            if (go != null) t = go.transform;
+        }
+
+        if (t != null)
+            t.gameObject.SetActive(true);
+    }
+
     void RefreshRoomHud(FartGameSession session)
     {
-        int sec = Mathf.Max(0, Mathf.CeilToInt(session.GetRoomPrepRemainingSeconds()));
-        string line = $"Fart in {sec}s";
-        if (countdownLabel != null) countdownLabel.text = line;
-        if (_runtimeCountdown != null) _runtimeCountdown.text = line;
+        float remaining = session.GetRoomPrepRemainingSeconds();
+        int sec = Mathf.Max(0, Mathf.CeilToInt(remaining));
+        string countdownLine = $"Fart in {sec}s";
+        if (roundLabel != null) roundLabel.text = string.Empty;
+        if (countdownLabel != null) countdownLabel.text = countdownLine;
+        if (_runtimeCountdown != null) _runtimeCountdown.text = countdownLine;
 
-        string roundLine = $"Round {session.CurrentRound}/{session.TotalRounds}";
-        if (roundLabel != null) roundLabel.text = roundLine;
-        if (_runtimeRound != null) _runtimeRound.text = roundLine;
+        int enlargedSize = CountdownBaseFontSize;
+        if (sec <= 3 && sec > 0)
+            enlargedSize = CountdownBaseFontSize + (4 - sec) * 18;
+
+        if (countdownLabel != null) countdownLabel.fontSize = enlargedSize;
+        if (_runtimeCountdown != null) _runtimeCountdown.fontSize = enlargedSize;
     }
 
     void EnsureRoomCountdownOverlay()
@@ -140,12 +164,9 @@ public class RoomSceneController : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
-        _runtimeCountdown = CreateHudLine(canvasGo.transform, "Countdown", 52,
+        _runtimeCountdown = CreateHudLine(canvasGo.transform, "Countdown", CountdownBaseFontSize,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -72f),
             new Vector2(1400f, 80f));
-        _runtimeRound = CreateHudLine(canvasGo.transform, "RoundLine", 34,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -140f),
-            new Vector2(1200f, 56f));
     }
 
     static Text CreateHudLine(Transform parent, string name, int fontSize,
@@ -173,6 +194,27 @@ public class RoomSceneController : MonoBehaviour
         outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
         outline.effectDistance = new Vector2(2f, -2f);
         return text;
+    }
+
+    void PrepareCountdownStyle()
+    {
+        ApplyHudTextStyle(countdownLabel);
+        ApplyHudTextStyle(_runtimeCountdown);
+        if (roundLabel != null)
+        {
+            roundLabel.text = string.Empty;
+            var outline = roundLabel.GetComponent<Outline>();
+            if (outline != null) outline.enabled = false;
+        }
+    }
+
+    static void ApplyHudTextStyle(Text label)
+    {
+        if (label == null) return;
+        label.color = MutedRed;
+        label.alignment = TextAnchor.MiddleCenter;
+        var outline = label.GetComponent<Outline>();
+        if (outline != null) outline.enabled = false;
     }
 
     static Font BuiltinUiFont()

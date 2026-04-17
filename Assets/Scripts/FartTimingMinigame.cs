@@ -37,11 +37,10 @@ public class FartTimingMinigame : MonoBehaviour
     [SerializeField] Sprite quietAnimalSprite;
     [SerializeField] Sprite loudAnimalSprite;
 
-    [Header("Result text")]
-    [SerializeField] float quietLoudnessMax = 0.34f;
-    [SerializeField] float loudLoudnessMin = 0.66f;
+    [Header("Result text (binary vs meter)")]
+    [Tooltip("Committed meter ≥ this → loud message; below → quiet.")]
+    [SerializeField] [Range(0f, 1f)] float resultLoudQuietSplit = 0.5f;
     [SerializeField] string quietMessage = "Made a quiet fart.";
-    [SerializeField] string mediumMessage = "Made a medium fart.";
     [SerializeField] string loudMessage = "Made a loud fart.";
     [SerializeField] string returnToRoomButtonLabel = "Return to room";
     [SerializeField] string endRunButtonLabel = "Continue to ending";
@@ -303,26 +302,21 @@ public class FartTimingMinigame : MonoBehaviour
             yield break;
 
         _returnButton.interactable = true;
+        if (EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(_returnButton.gameObject);
     }
 
     void RefreshReturnButtonCaption()
     {
         if (_returnButtonCaption == null || _session == null) return;
-        bool lastRound = _session.CurrentRound >= _session.TotalRounds;
-        _returnButtonCaption.text = lastRound ? endRunButtonLabel : returnToRoomButtonLabel;
+        _returnButtonCaption.text = endRunButtonLabel;
     }
 
     void ShowResultAfterCommit(float loudness01)
     {
         if (_resultText == null) return;
 
-        string msg;
-        if (loudness01 <= quietLoudnessMax)
-            msg = quietMessage;
-        else if (loudness01 >= loudLoudnessMin)
-            msg = loudMessage;
-        else
-            msg = mediumMessage;
+        string msg = loudness01 >= resultLoudQuietSplit ? loudMessage : quietMessage;
 
         _resultText.text = msg;
         if (_resultBannerRoot != null)
@@ -398,7 +392,7 @@ public class FartTimingMinigame : MonoBehaviour
         var font = BuiltinUiFont();
         if (font != null)
             _aimPromptText.font = font;
-        _aimPromptText.fontSize = 38;
+        _aimPromptText.fontSize = 30;
         _aimPromptText.fontStyle = FontStyle.Bold;
         _aimPromptText.alignment = TextAnchor.MiddleCenter;
         _aimPromptText.color = Color.white;
@@ -541,7 +535,7 @@ public class FartTimingMinigame : MonoBehaviour
             _resultText.font = font;
         else
             Debug.LogWarning("[Farthouse] No UI font found — result uses IMGUI fallback. Assign a Font asset on a prefab or install standard Unity resources.");
-        _resultText.fontSize = 40;
+        _resultText.fontSize = 30;
         _resultText.fontStyle = FontStyle.Bold;
         _resultText.alignment = TextAnchor.MiddleCenter;
         _resultText.color = Color.white;
@@ -592,7 +586,7 @@ public class FartTimingMinigame : MonoBehaviour
         _returnButtonCaption = btnLabelGo.AddComponent<Text>();
         if (font != null)
             _returnButtonCaption.font = font;
-        _returnButtonCaption.fontSize = 32;
+        _returnButtonCaption.fontSize = 24;
         _returnButtonCaption.fontStyle = FontStyle.Bold;
         _returnButtonCaption.alignment = TextAnchor.MiddleCenter;
         _returnButtonCaption.color = Color.white;

@@ -236,7 +236,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45b2ad5d2ca1f46ffb02425ac958bcc0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  totalRounds: 4
   prepDurationSeconds: 15
   fartPhaseDurationSeconds: 6
   initialSceneName: initial_scene
@@ -245,8 +244,10 @@ MonoBehaviour:
   endingSceneName: ending_scene
   statusLabel: {fileID: 0}
   timerLabel: {fileID: 0}
-  loudRoundsNeededForLoudRun: 3
-  contextualRoundsNeeded: 2
+  loudQuietSplitThreshold: 0.5
+  loudEndingKey: fartendo
+  quietWindowClosedEndingKey: smell_quiet
+  quietWindowOpenEndingKey: fartendo
 --- !u!4 &167881528
 Transform:
   m_ObjectHideFlags: 0
