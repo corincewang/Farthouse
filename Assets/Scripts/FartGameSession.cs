@@ -4,14 +4,14 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 /// <summary>
 /// Persists across scenes (DontDestroyOnLoad). Flow is always
-/// <b>initial_scene → room_scene → fart_scene → ... (5 rounds) → ending_scene</b>.
+/// <b>initial_scene → room_scene → fart_scene → … → ending_scene</b> (see <see cref="totalRounds"/>).
 /// Place one instance in <b>initial_scene</b>. Add all scenes to Build Settings.
 /// </summary>
 public class FartGameSession : MonoBehaviour
 {
     public static FartGameSession Instance { get; private set; }
 
-    [SerializeField] int totalRounds = 1;
+    [SerializeField] int totalRounds = 4;
     [SerializeField] float prepDurationSeconds = 15f;
     [SerializeField] float fartPhaseDurationSeconds = 6f;
 
@@ -33,6 +33,28 @@ public class FartGameSession : MonoBehaviour
     /// <summary>After last fart commit: 0 = quiet (top of bar), 1 = loud (bottom).</summary>
     public float LastFartLoudness01 { get; private set; }
     public FartLocation CurrentRoundLocation { get; private set; } = FartLocation.None;
+
+    /// <summary>Window open at end of prep (set by <see cref="RoomSceneController"/> from a <see cref="ToggleInteractable"/>).</summary>
+    bool _currentRoundWindowOpen;
+    bool _currentRoundInToilet;
+    bool _currentRoundHidingBehindPlant;
+    bool _forceToiletBlockedThisRound;
+    bool _blockToiletNextRound;
+
+    [Header("Smell reduction")]
+    [Range(0f, 1f)]
+    [SerializeField] float windowOpenSmellReduction = 0.12f;
+    [Range(0f, 1f)]
+    [SerializeField] float toiletSmellReduction = 0.25f;
+    [Range(0f, 1f)]
+    [SerializeField] float plantHideSmellReduction = 0.15f;
+
+    [Header("Ending rules")]
+    [Tooltip("How many rounds must be loud (meter) to treat the run as a \"loud\" ending branch.")]
+    [SerializeField] int loudRoundsNeededForLoudRun = 3;
+
+    [Tooltip("How many rounds with window open / at plant count as \"often\" for ending split.")]
+    [SerializeField] int contextualRoundsNeeded = 2;
 
     /// <summary>True only during room_scene prep countdown.</summary>
     public bool CanInteractDuringPrep { get; internal set; }
@@ -79,6 +101,8 @@ public class FartGameSession : MonoBehaviour
         public int roundIndex;
         public FartLocation location;
         public float loudness01;
+        public bool windowOpen;
+        public bool nearPlant;
     }
 
     public enum FartLocation
@@ -115,6 +139,9 @@ public class FartGameSession : MonoBehaviour
     public bool RunCompleted => _runCompleted;
     public string FinalEndingKey => _finalEndingKey;
     public IReadOnlyList<RoundRecord> RoundRecords => _roundRecords;
+    public bool CurrentRoundInToilet => _currentRoundInToilet;
+    public bool CurrentRoundHidingBehindPlant => _currentRoundHidingBehindPlant;
+    public bool IsToiletBlockedThisRound => _forceToiletBlockedThisRound;
 
     public void SetLastFartLoudness(float t)
     {
@@ -124,6 +151,45 @@ public class FartGameSession : MonoBehaviour
     public void SetCurrentRoundFartLocation(FartLocation location)
     {
         CurrentRoundLocation = location;
+    }
+
+    /// <summary>Call when room prep ends (before fart): whether the tracked window was open.</summary>
+    public void SetCurrentRoundWindowOpen(bool open)
+    {
+        _currentRoundWindowOpen = open;
+    }
+
+    public void SetCurrentRoundWindowState(bool open)
+    {
+        _currentRoundWindowOpen = open;
+    }
+
+    public void SetCurrentRoundHidingBehindPlant(bool hiding)
+    {
+        _currentRoundHidingBehindPlant = hiding;
+    }
+
+    public bool TryEnterToiletThisRound()
+    {
+        if (_currentRoundInToilet) return true;
+        if (_forceToiletBlockedThisRound) return false;
+
+        bool canEnter = UnityEngine.Random.value < 0.5f;
+        if (!canEnter) return false;
+
+        _currentRoundInToilet = true;
+        _blockToiletNextRound = true;
+        CurrentRoundLocation = FartLocation.RestroomSafe;
+        return true;
+    }
+
+    public float GetCurrentRoundSmellReduction01()
+    {
+        float total = 0f;
+        if (_currentRoundWindowOpen) total += windowOpenSmellReduction;
+        if (_currentRoundInToilet) total += toiletSmellReduction;
+        if (_currentRoundHidingBehindPlant) total += plantHideSmellReduction;
+        return Mathf.Clamp01(total);
     }
 
     /// <summary>New game from menu: round 1 → room_scene.</summary>
@@ -138,6 +204,11 @@ public class FartGameSession : MonoBehaviour
         _roundRecords.Clear();
         _finalEndingKey = "EndingCleanQuiet";
         _advanceLocked = false;
+        _currentRoundWindowOpen = false;
+        _currentRoundInToilet = false;
+        _currentRoundHidingBehindPlant = false;
+        _forceToiletBlockedThisRound = false;
+        _blockToiletNextRound = false;
         LoadRoomScene();
     }
 
@@ -220,6 +291,11 @@ public class FartGameSession : MonoBehaviour
     public void NotifyRoomSceneEntered()
     {
         _advanceLocked = false;
+        _forceToiletBlockedThisRound = _blockToiletNextRound;
+        _blockToiletNextRound = false;
+        _currentRoundInToilet = false;
+        _currentRoundHidingBehindPlant = false;
+        _currentRoundWindowOpen = false;
         if (_scheduleRoomPrepAnchor)
         {
             _scheduleRoomPrepAnchor = false;
@@ -301,7 +377,9 @@ public class FartGameSession : MonoBehaviour
         {
             roundIndex = CurrentRound,
             location = CurrentRoundLocation,
-            loudness01 = LastFartLoudness01
+            loudness01 = LastFartLoudness01,
+            windowOpen = _currentRoundWindowOpen,
+            nearPlant = _currentRoundHidingBehindPlant || CurrentRoundLocation == FartLocation.Plant
         });
     }
 
@@ -317,39 +395,46 @@ public class FartGameSession : MonoBehaviour
 
     string EvaluateEndingKey()
     {
-        int dogCount = 0;
-        int smellRiskCount = 0;
-        int cleanLocationCount = 0;
+        if (_roundRecords.Count == 0)
+            return "EndingCleanQuiet";
+
         int loudCount = 0;
         int quietCount = 0;
+        int windowOpenRounds = 0;
+        int plantRounds = 0;
 
         for (int i = 0; i < _roundRecords.Count; i++)
         {
             var r = _roundRecords[i];
-            if (r.location == FartLocation.Dog) dogCount++;
-            if (r.location == FartLocation.Window || r.location == FartLocation.Fan) cleanLocationCount++;
-            if (r.location == FartLocation.Plant || r.location == FartLocation.Music || r.location == FartLocation.Dog)
-                smellRiskCount++;
-
             if (r.loudness01 >= 0.66f) loudCount++;
-            if (r.loudness01 <= 0.34f) quietCount++;
+            else if (r.loudness01 <= 0.34f) quietCount++;
+            if (r.windowOpen) windowOpenRounds++;
+            if (r.nearPlant) plantRounds++;
         }
 
-        bool mostlyLoud = loudCount >= 3;
-        bool mostlyQuiet = quietCount >= 3;
+        int needLoud = Mathf.Clamp(loudRoundsNeededForLoudRun, 1, totalRounds);
+        int needCtx = Mathf.Clamp(contextualRoundsNeeded, 1, totalRounds);
+        bool loudRun = loudCount >= needLoud;
+        bool quietRun = quietCount >= needLoud;
 
-        // Fartendo: no-smell leaning locations and mostly loud.
-        if (cleanLocationCount >= 3 && mostlyLoud)
-            return "EndingFartendo";
+        if (loudRun)
+        {
+            if (plantRounds >= needCtx) return "EndingSmellLoud";
+            if (windowOpenRounds >= needCtx) return "EndingFartendo";
+            return "EndingSmellLoud";
+        }
 
-        // Smelly route first when risky locations dominate.
-        if (smellRiskCount >= 3)
-            return mostlyLoud ? "EndingSmellLoud" : "EndingSmellQuiet";
+        if (quietRun)
+        {
+            if (plantRounds >= needCtx) return "EndingSmellQuiet";
+            if (windowOpenRounds >= needCtx) return "EndingCleanQuiet";
+            return "EndingSmellQuiet";
+        }
 
-        // Dog-heavy but not clean-loud also tends to smell outcomes.
-        if (dogCount >= 3) return mostlyLoud ? "EndingSmellLoud" : "EndingSmellQuiet";
-        if (mostlyLoud) return "EndingSmellLoud";
-        if (mostlyQuiet) return "EndingCleanQuiet";
+        if (plantRounds >= needCtx) return "EndingSmellQuiet";
+        if (windowOpenRounds >= needCtx) return "EndingCleanQuiet";
+        if (loudCount > quietCount) return "EndingSmellLoud";
+        if (quietCount > loudCount) return "EndingCleanQuiet";
         return "EndingSmellQuiet";
     }
 

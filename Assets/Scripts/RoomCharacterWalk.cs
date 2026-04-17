@@ -32,10 +32,13 @@ public class RoomCharacterWalk : MonoBehaviour
     [SerializeField] int sortingOrderPerY = 10;
 
     SpriteRenderer _sr;
+    Rigidbody2D _rb;
+    Vector2 _moveInput;
 
     void Awake()
     {
         _sr = GetComponent<SpriteRenderer>();
+        _rb = GetComponent<Rigidbody2D>();
     }
 
     void Update()
@@ -43,15 +46,44 @@ public class RoomCharacterWalk : MonoBehaviour
         if (!FartGameSession.Instance || !FartGameSession.Instance.CanInteractDuringPrep)
             return;
 
-        float x = Input.GetAxisRaw("Horizontal");
-        float y = Input.GetAxisRaw("Vertical");
+        _moveInput = ReadMoveInput();
+        if (_rb == null)
+            ApplyMove(Time.deltaTime);
+    }
 
-        Vector3 p = transform.position;
-        p.x += x * moveSpeed * Time.deltaTime;
-        p.y += y * moveSpeed * Time.deltaTime;
+    void FixedUpdate()
+    {
+        if (!FartGameSession.Instance || !FartGameSession.Instance.CanInteractDuringPrep)
+            return;
+        if (_rb == null) return;
+        ApplyMove(Time.fixedDeltaTime);
+    }
+
+    Vector2 ReadMoveInput()
+    {
+        float x = 0f;
+        float y = 0f;
+
+        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) x -= 1f;
+        if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) x += 1f;
+        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) y -= 1f;
+        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) y += 1f;
+
+        return new Vector2(x, y).normalized;
+    }
+
+    void ApplyMove(float dt)
+    {
+        float x = _moveInput.x;
+        float y = _moveInput.y;
+
+        Vector3 p = _rb != null ? _rb.position : (Vector2)transform.position;
+        p.x += x * moveSpeed * dt;
+        p.y += y * moveSpeed * dt;
         p.x = Mathf.Clamp(p.x, minX, maxX);
         p.y = Mathf.Clamp(p.y, minY, maxY);
-        transform.position = p;
+        if (_rb != null) _rb.MovePosition(p);
+        else transform.position = p;
 
         float depthT = Mathf.InverseLerp(minY, maxY, p.y);
         if (!largerTowardMaxY) depthT = 1f - depthT;

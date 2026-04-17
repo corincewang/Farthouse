@@ -25,6 +25,10 @@ public class RoomSceneController : MonoBehaviour
 
     [SerializeField] LocationAnchor[] locationAnchors;
 
+    [Header("Ending state (optional)")]
+    [Tooltip("Usually the window’s ToggleInteractable. Snapshotted when prep ends for that round’s ending record.")]
+    [SerializeField] ToggleInteractable windowForEndingSnapshot;
+
     bool _ended;
     Text _runtimeCountdown;
     Text _runtimeRound;
@@ -71,7 +75,11 @@ public class RoomSceneController : MonoBehaviour
         if (remaining > 0f || _ended) return;
 
         _ended = true;
-        session.SetCurrentRoundFartLocation(ResolveCurrentLocation());
+        if (session.CurrentRoundInToilet)
+            session.SetCurrentRoundFartLocation(FartGameSession.FartLocation.RestroomSafe);
+        else
+            session.SetCurrentRoundFartLocation(ResolveCurrentLocation());
+        session.SetCurrentRoundWindowOpen(windowForEndingSnapshot != null && windowForEndingSnapshot.IsOpen);
         session.CanInteractDuringPrep = false;
         session.NotifyRoomPrepEnded();
         enabled = false;

@@ -5,8 +5,16 @@ using UnityEngine;
 /// </summary>
 public class ToggleInteractable : MonoBehaviour
 {
+    enum InteractableKind
+    {
+        GenericToggle,
+        Window,
+        ToiletDoor
+    }
+
     [SerializeField] Camera targetCamera;
     [SerializeField] LayerMask interactLayers;
+    [SerializeField] InteractableKind interactableKind = InteractableKind.GenericToggle;
 
     [Header("Visual (pick one approach)")]
     [SerializeField] SpriteRenderer spriteRenderer;
@@ -16,11 +24,21 @@ public class ToggleInteractable : MonoBehaviour
     [SerializeField] GameObject openVisual;
     [SerializeField] GameObject closedVisual;
 
+    [Header("Toilet occupied UI (optional)")]
+    [SerializeField] GameObject toiletOccupiedVisual;
+    [SerializeField] bool autoFindToiletOccupiedVisual = true;
+    [SerializeField] float toiletOccupiedHintSeconds = 1.25f;
+
     Collider2D _collider;
     bool _isOpen;
+    Coroutine _occupiedHintRoutine;
+
+    public bool IsOpen => _isOpen;
 
     void Awake()
     {
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+
         _collider = GetComponent<Collider2D>();
         if (_collider == null)
         {
@@ -33,14 +51,17 @@ public class ToggleInteractable : MonoBehaviour
             _collider = box;
         }
 
-        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
-
         if (interactLayers.value == 0)
             interactLayers = LayerMask.GetMask("RoomItems");
 
         if (targetCamera == null) targetCamera = Camera.main;
 
+        if (interactableKind == InteractableKind.ToiletDoor && toiletOccupiedVisual == null && autoFindToiletOccupiedVisual)
+            toiletOccupiedVisual = TryAutoFindToiletOccupiedVisual();
+
         ApplyVisual();
+        if (toiletOccupiedVisual != null)
+            toiletOccupiedVisual.SetActive(false);
     }
 
     void Update()
@@ -51,11 +72,34 @@ public class ToggleInteractable : MonoBehaviour
 
         Vector2 world = FartMouseUtility.ScreenToWorld2D(targetCamera, Input.mousePosition, transform.position.z);
         Collider2D hit = Physics2D.OverlapPoint(world, interactLayers);
-        if (hit != null && hit == _collider)
+        bool clickedSelf = hit != null && hit == _collider;
+        if (!clickedSelf)
+            clickedSelf = _collider.OverlapPoint(world);
+
+        if (clickedSelf)
         {
-            _isOpen = !_isOpen;
-            ApplyVisual();
+            HandleInteract();
         }
+    }
+
+    void HandleInteract()
+    {
+        var session = FartGameSession.Instance;
+        if (session == null) return;
+
+        if (interactableKind == InteractableKind.ToiletDoor)
+        {
+            bool canEnter = session.TryEnterToiletThisRound();
+            _isOpen = canEnter;
+            ShowToiletOccupiedHint(!canEnter);
+            ApplyVisual();
+            return;
+        }
+
+        _isOpen = !_isOpen;
+        if (interactableKind == InteractableKind.Window)
+            session.SetCurrentRoundWindowState(_isOpen);
+        ApplyVisual();
     }
 
     void ApplyVisual()
@@ -65,5 +109,51 @@ public class ToggleInteractable : MonoBehaviour
 
         if (openVisual != null) openVisual.SetActive(_isOpen);
         if (closedVisual != null) closedVisual.SetActive(!_isOpen);
+    }
+
+    void ShowToiletOccupiedHint(bool show)
+    {
+        if (toiletOccupiedVisual == null) return;
+
+        if (_occupiedHintRoutine != null)
+        {
+            StopCoroutine(_occupiedHintRoutine);
+            _occupiedHintRoutine = null;
+        }
+
+        toiletOccupiedVisual.SetActive(show);
+        if (!show) return;
+
+        float wait = Mathf.Max(0.1f, toiletOccupiedHintSeconds);
+        _occupiedHintRoutine = StartCoroutine(HideToiletOccupiedHintAfter(wait));
+    }
+
+    System.Collections.IEnumerator HideToiletOccupiedHintAfter(float seconds)
+    {
+        yield return new WaitForSeconds(seconds);
+        if (toiletOccupiedVisual != null)
+            toiletOccupiedVisual.SetActive(false);
+        _occupiedHintRoutine = null;
+    }
+
+    GameObject TryAutoFindToiletOccupiedVisual()
+    {
+        foreach (var sr in GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            if (sr == null || sr.gameObject == gameObject) continue;
+            string n = sr.gameObject.name.ToLowerInvariant();
+            if (n.Contains("occupied") || n.Contains("effect") || n.Contains("toilet_effect"))
+                return sr.gameObject;
+        }
+
+        foreach (var tr in GetComponentsInChildren<Transform>(true))
+        {
+            if (tr == null || tr.gameObject == gameObject) continue;
+            string n = tr.gameObject.name.ToLowerInvariant();
+            if (n.Contains("occupied") || n.Contains("effect") || n.Contains("toilet_effect"))
+                return tr.gameObject;
+        }
+
+        return null;
     }
 }

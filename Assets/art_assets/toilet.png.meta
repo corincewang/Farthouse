@@ -1,10 +1,19 @@
 fileFormatVersion: 2
-guid: a4a6a62804fa2477291fe4ea2078243e
+guid: 2f64191dbfb8945ff864baa2c85368ea
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4211201310020970577
-    second: background.png3_0
+      213: -8243884347342347663
+    second: toilet_0
+  - first:
+      213: -4879703352707559730
+    second: toilet_1
+  - first:
+      213: -1767755706354810716
+    second: toilet_2
+  - first:
+      213: 8784545413129680212
+    second: toilet_3
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +109,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: background.png3_0
+      name: toilet_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 1920
-        height: 1080
+        x: 239
+        y: 735
+        width: 9
+        height: 7
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +124,74 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 158a5719741317a30800000000000000
-      internalID: 4211201310020970577
+      spriteID: 172a1433dd6d79d80800000000000000
+      internalID: -8243884347342347663
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: toilet_1
+      rect:
+        serializedVersion: 2
+        x: 220
+        y: 722
+        width: 21
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ece459c87afc74cb0800000000000000
+      internalID: -4879703352707559730
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: toilet_2
+      rect:
+        serializedVersion: 2
+        x: 105
+        y: 48
+        width: 145
+        height: 649
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4a04d011d8ba777e0800000000000000
+      internalID: -1767755706354810716
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: toilet_3
+      rect:
+        serializedVersion: 2
+        x: 195
+        y: 685
+        width: 19
+        height: 9
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 455b1eeb289f8e970800000000000000
+      internalID: 8784545413129680212
       vertices: []
       indices: 
       edges: []
@@ -135,7 +210,10 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      background.png3_0: 4211201310020970577
+      toilet_0: -8243884347342347663
+      toilet_1: -4879703352707559730
+      toilet_2: -1767755706354810716
+      toilet_3: 8784545413129680212
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

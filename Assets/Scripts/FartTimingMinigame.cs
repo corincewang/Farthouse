@@ -258,7 +258,8 @@ public class FartTimingMinigame : MonoBehaviour
     {
         if (_committed) return;
         _committed = true;
-        CommittedLoudness01 = _cursor01;
+        float smellReduction = _session != null ? _session.GetCurrentRoundSmellReduction01() : 0f;
+        CommittedLoudness01 = Mathf.Clamp01(_cursor01 - smellReduction);
         if (_session != null)
             _session.SetLastFartLoudness(CommittedLoudness01);
         if (_aimPromptRoot != null)

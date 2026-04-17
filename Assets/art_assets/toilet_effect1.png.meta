@@ -1,10 +1,19 @@
 fileFormatVersion: 2
-guid: a4a6a62804fa2477291fe4ea2078243e
+guid: aca89bf4cdc1741699a320103b691d89
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4211201310020970577
-    second: background.png3_0
+      213: -5059415163425916784
+    second: toilet_effect1_0
+  - first:
+      213: -1219565208521329377
+    second: toilet_effect1_1
+  - first:
+      213: 6089701430676679113
+    second: toilet_effect1_2
+  - first:
+      213: -4794791630233880098
+    second: toilet_effect1_3
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +46,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -100,13 +109,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: background.png3_0
+      name: toilet_effect1_0
       rect:
         serializedVersion: 2
         x: 0
-        y: 0
-        width: 1920
-        height: 1080
+        y: 556
+        width: 175
+        height: 152
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +124,74 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 158a5719741317a30800000000000000
-      internalID: 4211201310020970577
+      spriteID: 098f5ccf6b859c9b0800000000000000
+      internalID: -5059415163425916784
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: toilet_effect1_1
+      rect:
+        serializedVersion: 2
+        x: 178
+        y: 577
+        width: 45
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f1539a587eb331fe0800000000000000
+      internalID: -1219565208521329377
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: toilet_effect1_2
+      rect:
+        serializedVersion: 2
+        x: 196
+        y: 570
+        width: 38
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9c9eba3cf27f28450800000000000000
+      internalID: 6089701430676679113
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: toilet_effect1_3
+      rect:
+        serializedVersion: 2
+        x: 92
+        y: 441
+        width: 35
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ed9b4eb8a6a757db0800000000000000
+      internalID: -4794791630233880098
       vertices: []
       indices: 
       edges: []
@@ -135,7 +210,10 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      background.png3_0: 4211201310020970577
+      toilet_effect1_0: -5059415163425916784
+      toilet_effect1_1: -1219565208521329377
+      toilet_effect1_2: 6089701430676679113
+      toilet_effect1_3: -4794791630233880098
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
