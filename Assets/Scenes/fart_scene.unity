@@ -452,7 +452,7 @@ MonoBehaviour:
   buttPanelWidthFraction: 0.44
   quietAnimalSprite: {fileID: 0}
   loudAnimalSprite: {fileID: 0}
-  resultLoudQuietSplit: 0.5
+  resultLoudQuietSplit: 0.4
   quietMessage: Made a quiet fart.
   loudMessage: Made a loud fart.
   returnToRoomButtonLabel: Return to room

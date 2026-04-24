@@ -5,8 +5,8 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// Put in ending_scene only. Shows one ending CG by key from <see cref="FartGameSession"/>,
-/// Restart: assign <see cref="homeButton"/> in-scene, or <see cref="homeButtonPrefab"/>, or rely on runtime UI.
+/// Put in ending_scene only. Shows one ending CG by key from <see cref="FartGameSession"/>.
+/// Restart is keyboard-only: top-right prompt + Space.
 /// </summary>
 public class EndingSceneController : MonoBehaviour
 {
@@ -22,55 +22,14 @@ public class EndingSceneController : MonoBehaviour
     [SerializeField] string fallbackEndingKey = "EndingCleanQuiet";
     [SerializeField] string initialSceneName = "initial_scene";
 
-    [Header("Restart button (pick one)")]
-    [Tooltip("Drag a Button from the scene hierarchy — position/size in the RectTransform as you like.")]
-    [SerializeField] Button homeButton;
+    [Header("Restart prompt")]
+    [SerializeField] string restartPromptText = "Space to restart";
 
-    [Tooltip("If Restart Button is empty, instantiate this prefab (root or child must have a Button).")]
-    [SerializeField] GameObject homeButtonPrefab;
-
-    [Tooltip("Parent for the prefab instance. If null, uses this object’s transform (prefer a Canvas under your UI).")]
-    [SerializeField] Transform homeButtonParent;
-
-    [Tooltip("Caption for scene/prefab/runtime button (TMP or legacy Text under the button).")]
-    [SerializeField] string homeButtonLabel = "Restart";
-
-    [Tooltip("If no Restart Button and no prefab: create the default yellow runtime button.")]
-    [SerializeField] bool createHomeButtonIfMissing = true;
+    Text _runtimeRestartPrompt;
 
     void Awake()
     {
-        SetupHomeButton();
-    }
-
-    void SetupHomeButton()
-    {
-        if (homeButton != null)
-        {
-            homeButton.onClick.RemoveListener(BackToHome);
-            homeButton.onClick.AddListener(BackToHome);
-            return;
-        }
-
-        if (homeButtonPrefab != null)
-        {
-            Transform parent = homeButtonParent != null ? homeButtonParent : transform;
-            var instance = Instantiate(homeButtonPrefab, parent);
-            instance.name = homeButtonPrefab.name;
-            homeButton = instance.GetComponent<Button>();
-            if (homeButton == null)
-                homeButton = instance.GetComponentInChildren<Button>(true);
-            if (homeButton != null)
-            {
-                homeButton.onClick.RemoveListener(BackToHome);
-                homeButton.onClick.AddListener(BackToHome);
-            }
-
-            return;
-        }
-
-        if (createHomeButtonIfMissing)
-            EnsureRuntimeHomeButton();
+        EnsureRuntimeRestartPrompt();
     }
 
     void Start()
@@ -87,30 +46,12 @@ public class EndingSceneController : MonoBehaviour
             key = session.FinalEndingKey;
 
         ApplyEndingVisual(key);
-        ApplyHomeButtonCaption();
-
-        if (homeButton != null && EventSystem.current != null)
-            EventSystem.current.SetSelectedGameObject(homeButton.gameObject);
     }
 
-    void ApplyHomeButtonCaption()
+    void Update()
     {
-        if (homeButton == null) return;
-
-        var tmp = homeButton.GetComponentInChildren<TextMeshProUGUI>(true);
-        if (tmp != null)
-        {
-            tmp.text = homeButtonLabel;
-            tmp.fontSize = 52f;
-            return;
-        }
-
-        var leg = homeButton.GetComponentInChildren<Text>(true);
-        if (leg != null)
-        {
-            leg.text = homeButtonLabel;
-            leg.fontSize = 52;
-        }
+        if (Input.GetKeyDown(KeyCode.Space))
+            BackToHome();
     }
 
     /// <summary>Restarts the run via <see cref="FartGameSession.StartNewGame"/> when session exists.</summary>
@@ -149,7 +90,7 @@ public class EndingSceneController : MonoBehaviour
         }
     }
 
-    void EnsureRuntimeHomeButton()
+    void EnsureRuntimeRestartPrompt()
     {
         if (EventSystem.current == null)
         {
@@ -158,7 +99,7 @@ public class EndingSceneController : MonoBehaviour
             es.AddComponent<StandaloneInputModule>();
         }
 
-        var canvasGo = new GameObject("EndingHomeUI");
+        var canvasGo = new GameObject("EndingPromptUI");
         canvasGo.transform.SetParent(null, false);
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -170,49 +111,25 @@ public class EndingSceneController : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
-        var btnGo = new GameObject("RestartButton", typeof(RectTransform));
-        btnGo.transform.SetParent(canvasGo.transform, false);
-        var btnRt = btnGo.GetComponent<RectTransform>();
-        // Narrower band, shifted toward the right.
-        btnRt.anchorMin = new Vector2(0.58f, 0.06f);
-        btnRt.anchorMax = new Vector2(0.74f, 0.12f);
-        btnRt.offsetMin = Vector2.zero;
-        btnRt.offsetMax = Vector2.zero;
-        btnRt.pivot = new Vector2(0.5f, 0.5f);
-
-        var btnImg = btnGo.AddComponent<Image>();
-        btnImg.sprite = UiWhiteSprite();
-        var yellow = new Color(0.98f, 0.78f, 0.15f, 1f);
-        btnImg.color = yellow;
-        homeButton = btnGo.AddComponent<Button>();
-        homeButton.targetGraphic = btnImg;
-        var colors = homeButton.colors;
-        colors.normalColor = yellow;
-        colors.highlightedColor = new Color(1f, 0.9f, 0.35f, 1f);
-        colors.pressedColor = new Color(0.85f, 0.65f, 0.1f, 1f);
-        colors.disabledColor = new Color(0.6f, 0.55f, 0.45f, 0.55f);
-        homeButton.colors = colors;
-        var nav = homeButton.navigation;
-        nav.mode = Navigation.Mode.None;
-        homeButton.navigation = nav;
-        homeButton.onClick.AddListener(BackToHome);
-
-        var labelGo = new GameObject("Label", typeof(RectTransform));
-        labelGo.transform.SetParent(btnGo.transform, false);
+        var labelGo = new GameObject("RestartPrompt", typeof(RectTransform));
+        labelGo.transform.SetParent(canvasGo.transform, false);
         var lblRt = labelGo.GetComponent<RectTransform>();
-        lblRt.anchorMin = Vector2.zero;
-        lblRt.anchorMax = Vector2.one;
-        lblRt.offsetMin = Vector2.zero;
-        lblRt.offsetMax = Vector2.zero;
+        lblRt.anchorMin = new Vector2(1f, 1f);
+        lblRt.anchorMax = new Vector2(1f, 1f);
+        lblRt.pivot = new Vector2(1f, 1f);
+        lblRt.anchoredPosition = new Vector2(-24f, -24f);
+        lblRt.sizeDelta = new Vector2(520f, 90f);
+
         var txt = labelGo.AddComponent<Text>();
         var font = BuiltinUiFont();
         if (font != null) txt.font = font;
-        txt.fontSize = 52;
+        txt.fontSize = 44;
         txt.fontStyle = FontStyle.Bold;
-        txt.alignment = TextAnchor.MiddleCenter;
-        txt.color = Color.white;
-        txt.text = homeButtonLabel;
+        txt.alignment = TextAnchor.UpperRight;
+        txt.color = new Color(0.78f, 0.18f, 0.42f, 1f);
+        txt.text = restartPromptText;
         txt.raycastTarget = false;
+        _runtimeRestartPrompt = txt;
     }
 
     static Sprite _uiSprite;

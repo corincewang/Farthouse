@@ -253,7 +253,7 @@ MonoBehaviour:
   loudQuietSplitThreshold: 0.5
   loudEndingKey: fartendo
   quietWindowClosedEndingKey: smell_quiet
-  quietWindowOpenEndingKey: fartendo
+  quietWindowOpenEndingKey: quietnotsmell
 --- !u!4 &167881528
 Transform:
   m_ObjectHideFlags: 0

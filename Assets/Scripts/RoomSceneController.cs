@@ -10,11 +10,14 @@ using TMPro;
 public class RoomSceneController : MonoBehaviour
 {
     [SerializeField] bool createSessionIfMissing = true;
-    [Tooltip("If null, a small overlay is created at runtime showing countdown until fart.")]
+    [Tooltip("Legacy scene label. When runtime overlay is enabled, this is ignored.")]
     [SerializeField] TextMeshProUGUI countdownLabel;
     [SerializeField] TextMeshProUGUI roundLabel;
     [SerializeField] Transform playerTransform;
     [SerializeField] FartGameSession.FartLocation defaultLocation = FartGameSession.FartLocation.None;
+    [Header("Countdown UI")]
+    [Tooltip("Always generate a top-center runtime countdown so build/editor positions stay consistent.")]
+    [SerializeField] bool useRuntimeTopCenterCountdown = true;
 
     [System.Serializable]
     struct LocationAnchor
@@ -43,8 +46,15 @@ public class RoomSceneController : MonoBehaviour
 
     void Awake()
     {
-        if (countdownLabel == null)
+        if (useRuntimeTopCenterCountdown)
+        {
             EnsureRoomCountdownOverlay();
+            countdownLabel = null;
+        }
+        else if (countdownLabel == null)
+        {
+            EnsureRoomCountdownOverlay();
+        }
     }
 
     void Start()
@@ -201,7 +211,7 @@ public class RoomSceneController : MonoBehaviour
         rowRt.anchorMin = new Vector2(0.5f, 1f);
         rowRt.anchorMax = new Vector2(0.5f, 1f);
         rowRt.pivot = new Vector2(0.5f, 1f);
-        rowRt.anchoredPosition = new Vector2(0f, -72f);
+        rowRt.anchoredPosition = new Vector2(0f, -10f);
         rowRt.sizeDelta = new Vector2(900f, 90f);
         var hlg = rowGo.AddComponent<HorizontalLayoutGroup>();
         hlg.childAlignment = TextAnchor.MiddleCenter;

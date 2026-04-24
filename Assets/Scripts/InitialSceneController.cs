@@ -6,7 +6,8 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Put in <b>initial_scene</b> (menu). <b>Left mouse click</b> (not on UI): start run, continue to room, or restart. UI buttons can still call <see cref="StartGame"/> / <see cref="ContinueToRoom"/>.
+/// Put in <b>initial_scene</b> (menu). <b>Left mouse click</b> (not on UI), <b>Space</b>, or <b>Enter</b>: start run.
+/// UI buttons can still call <see cref="StartGame"/> / <see cref="ContinueToRoom"/>.
 /// If this component lives on a DontDestroyOnLoad object, click handling is limited to <see cref="menuSceneName"/> so room_scene clicks do not reload the room.
 /// </summary>
 public class InitialSceneController : MonoBehaviour
@@ -25,13 +26,29 @@ public class InitialSceneController : MonoBehaviour
         return false;
     }
 
+    static bool StartKeyPressedThisFrame()
+    {
+        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            return true;
+#if ENABLE_INPUT_SYSTEM
+        if (Keyboard.current != null &&
+            (Keyboard.current.spaceKey.wasPressedThisFrame ||
+             Keyboard.current.enterKey.wasPressedThisFrame ||
+             Keyboard.current.numpadEnterKey.wasPressedThisFrame))
+            return true;
+#endif
+        return false;
+    }
+
     void Update()
     {
         if (SceneManager.GetActiveScene().name != menuSceneName)
             return;
 
-        if (!LeftMouseClickedThisFrame()) return;
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+        bool click = LeftMouseClickedThisFrame();
+        bool key = StartKeyPressedThisFrame();
+        if (!click && !key) return;
+        if (click && EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
         if (FartGameSession.Instance == null)

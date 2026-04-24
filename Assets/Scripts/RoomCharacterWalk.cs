@@ -13,6 +13,10 @@ public class RoomCharacterWalk : MonoBehaviour
     [Tooltip("Horizontal bounds (world units).")]
     [SerializeField] float minX = -8f;
     [SerializeField] float maxX = 8f;
+    [SerializeField] bool enableBandSpecificLeftBound = true;
+    [SerializeField] float bandMinY = -1.2f;
+    [SerializeField] float bandMaxY = -0.9f;
+    [SerializeField] float bandMinX = -5.3f;
 
     [Tooltip("Depth bounds on Y (world space), e.g. -5 (far) … -0.9 (near).")]
     [SerializeField] float minY = -5f;
@@ -78,10 +82,18 @@ public class RoomCharacterWalk : MonoBehaviour
         float y = _moveInput.y;
 
         Vector3 p = _rb != null ? _rb.position : (Vector2)transform.position;
-        p.x += x * moveSpeed * dt;
+        float proposedX = p.x + x * moveSpeed * dt;
         p.y += y * moveSpeed * dt;
-        p.x = Mathf.Clamp(p.x, minX, maxX);
         p.y = Mathf.Clamp(p.y, minY, maxY);
+        float activeMinX = ResolveActiveMinX(p.y);
+
+        // Block outward movement at boundaries instead of snapping to the edge.
+        if (proposedX < activeMinX && x < 0f)
+            proposedX = p.x;
+        else if (proposedX > maxX && x > 0f)
+            proposedX = p.x;
+
+        p.x = proposedX;
         if (_rb != null) _rb.MovePosition(p);
         else transform.position = p;
 
@@ -98,6 +110,14 @@ public class RoomCharacterWalk : MonoBehaviour
 
         if (updateSortingOrderByDepth && _sr != null)
             _sr.sortingOrder = sortingOrderBase + Mathf.RoundToInt(p.y * sortingOrderPerY);
+    }
+
+    float ResolveActiveMinX(float y)
+    {
+        if (!enableBandSpecificLeftBound) return minX;
+        if (y >= bandMinY && y <= bandMaxY)
+            return Mathf.Min(minX, bandMinX);
+        return minX;
     }
 
 #if UNITY_EDITOR

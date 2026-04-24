@@ -63,14 +63,17 @@ public class FartGameSession : MonoBehaviour
     [Tooltip("Meter value ≥ this counts as loud; below counts as quiet.")]
     [SerializeField] [Range(0f, 1f)] float loudQuietSplitThreshold = 0.5f;
 
-    [Tooltip("Loud fart → this ending key (e.g. fartendo).")]
+    [Tooltip("Loud fart without smell → this ending key (e.g. fartendo).")]
     [SerializeField] string loudEndingKey = "fartendo";
+
+    [Tooltip("Loud fart with smell → this ending key (e.g. smell_loud).")]
+    [SerializeField] string loudSmellEndingKey = "smell_loud";
 
     [Tooltip("Quiet fart with window closed → this ending key (e.g. smell_quiet).")]
     [SerializeField] string quietWindowClosedEndingKey = "smell_quiet";
 
-    [Tooltip("Quiet fart with window open → ventilated / clean branch (e.g. fartendo).")]
-    [SerializeField] string quietWindowOpenEndingKey = "fartendo";
+    [Tooltip("Quiet fart with window open → not-smelly quiet branch (e.g. quietnotsmell).")]
+    [SerializeField] string quietWindowOpenEndingKey = "quietnotsmell";
 
     /// <summary>True only during room_scene prep countdown.</summary>
     public bool CanInteractDuringPrep { get; internal set; }
@@ -390,7 +393,7 @@ public class FartGameSession : MonoBehaviour
 
     string InitialSceneStatusText()
     {
-        return "Farthouse — left-click to start";
+        return "Farthouse — click / SPACE / ENTER to start";
     }
 
     void CommitCurrentRoundResult()
@@ -423,8 +426,9 @@ public class FartGameSession : MonoBehaviour
 
         var r = _roundRecords[0];
         bool loud = r.loudness01 >= loudQuietSplitThreshold;
+        bool smell = !r.windowOpen || r.nearPlant;
         if (loud)
-            return loudEndingKey;
+            return smell ? loudSmellEndingKey : loudEndingKey;
         if (r.windowOpen)
             return quietWindowOpenEndingKey;
         return quietWindowClosedEndingKey;

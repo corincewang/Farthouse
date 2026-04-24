@@ -38,8 +38,8 @@ public class FartTimingMinigame : MonoBehaviour
     [SerializeField] Sprite loudAnimalSprite;
 
     [Header("Result text (binary vs meter)")]
-    [Tooltip("Committed meter ≥ this → loud message; below → quiet.")]
-    [SerializeField] [Range(0f, 1f)] float resultLoudQuietSplit = 0.5f;
+    [Tooltip("Top 40% is quiet (0.0-0.4). Anything below that is loud.")]
+    [SerializeField] [Range(0f, 1f)] float resultLoudQuietSplit = 0.4f;
     [SerializeField] string quietMessage = "Made a quiet fart.";
     [SerializeField] string loudMessage = "Made a loud fart.";
     [SerializeField] string returnToRoomButtonLabel = "Return to room";
